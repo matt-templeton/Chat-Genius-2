@@ -58,7 +58,7 @@ export const channels = pgTable('Channels', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 }, (table) => ({
-  workspaceNameIdx: uniqueIndex('idx_channels_workspace_name').on(table.workspaceId, table.name),
+  workspaceNameIdx: uniqueIndex('idx_channels_workspace_name').on(table.workspaceId, table.name, { expression: true }),
   notArchivedIdx: index('idx_channels_not_archived').on(table.workspaceId, table.name).where(sql`${table.archived} = false`)
 }));
 
