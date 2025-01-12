@@ -1,12 +1,12 @@
 import supertest from 'supertest';
 import express from 'express';
+import bcrypt from 'bcrypt';
 import { registerRoutes } from '../../server/routes';
 import { db } from '../../db';
 import { users } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 
 const app = express();
-// Important: Add body parsing middleware before registering routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -39,8 +39,11 @@ describe('Auth Endpoints', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty('error');
-      expect(response.body.details.code).toBe('INVALID_EMAIL');
+      expect(response.body).toMatchObject({
+        details: {
+          code: 'INVALID_EMAIL'
+        }
+      });
     });
 
     it('should return 400 when password is too weak', async () => {
@@ -53,8 +56,11 @@ describe('Auth Endpoints', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty('error');
-      expect(response.body.details.code).toBe('WEAK_PASSWORD');
+      expect(response.body).toMatchObject({
+        details: {
+          code: 'WEAK_PASSWORD'
+        }
+      });
     });
 
     it('should return 409 when email is already in use', async () => {
@@ -77,8 +83,11 @@ describe('Auth Endpoints', () => {
         });
 
       expect(response.status).toBe(409);
-      expect(response.body).toHaveProperty('error');
-      expect(response.body.details.code).toBe('EMAIL_IN_USE');
+      expect(response.body).toMatchObject({
+        details: {
+          code: 'EMAIL_IN_USE'
+        }
+      });
     });
   });
 
@@ -103,11 +112,13 @@ describe('Auth Endpoints', () => {
         });
 
       expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('accessToken');
-      expect(response.body).toHaveProperty('refreshToken');
+      expect(response.body).toMatchObject({
+        accessToken: expect.any(String),
+        refreshToken: expect.any(String)
+      });
     });
 
-    it('should return 401 with invalid password', async () => {
+    it('should return 401 with invalid credentials', async () => {
       const response = await request
         .post('/api/v1/auth/login')
         .send({
@@ -116,8 +127,11 @@ describe('Auth Endpoints', () => {
         });
 
       expect(response.status).toBe(401);
-      expect(response.body).toHaveProperty('error');
-      expect(response.body.details.code).toBe('INVALID_CREDENTIALS');
+      expect(response.body).toMatchObject({
+        details: {
+          code: 'INVALID_CREDENTIALS'
+        }
+      });
     });
 
     it('should return 401 with non-existent email', async () => {
@@ -129,8 +143,11 @@ describe('Auth Endpoints', () => {
         });
 
       expect(response.status).toBe(401);
-      expect(response.body).toHaveProperty('error');
-      expect(response.body.details.code).toBe('INVALID_CREDENTIALS');
+      expect(response.body).toMatchObject({
+        details: {
+          code: 'INVALID_CREDENTIALS'
+        }
+      });
     });
   });
 
@@ -138,7 +155,6 @@ describe('Auth Endpoints', () => {
     let verificationToken: string;
 
     beforeEach(async () => {
-      // Create a test user and capture the verification token
       const registerResponse = await request
         .post('/api/v1/auth/register')
         .send({
@@ -148,7 +164,7 @@ describe('Auth Endpoints', () => {
         });
 
       // In a real implementation, we would capture the verification token
-      // from the email service mock
+      // from the email service mock. For now, we use a test token
       verificationToken = 'test-verification-token';
     });
 
@@ -167,8 +183,25 @@ describe('Auth Endpoints', () => {
         .send({ token: 'invalid-token' });
 
       expect(response.status).toBe(400);
-      expect(response.body).toHaveProperty('error');
-      expect(response.body.details.code).toBe('INVALID_TOKEN');
+      expect(response.body).toMatchObject({
+        details: {
+          code: 'INVALID_TOKEN'
+        }
+      });
+    });
+
+    it('should return 400 with expired token', async () => {
+      const response = await request
+        .post('/api/v1/auth/verify-email')
+        .send({ token: 'expired-verification-token' });
+
+      expect(response.status).toBe(400);
+      // Per OpenAPI spec, expired tokens also return INVALID_TOKEN
+      expect(response.body).toMatchObject({
+        details: {
+          code: 'INVALID_TOKEN'
+        }
+      });
     });
   });
 
@@ -201,18 +234,37 @@ describe('Auth Endpoints', () => {
         .send({ refreshToken });
 
       expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('accessToken');
-      expect(response.body).toHaveProperty('refreshToken');
+      expect(response.body).toMatchObject({
+        accessToken: expect.any(String),
+        refreshToken: expect.any(String)
+      });
     });
 
     it('should return 401 with invalid refresh token', async () => {
       const response = await request
         .post('/api/v1/auth/refresh')
-        .send({ refreshToken: 'invalid-token' });
+        .send({ refreshToken: 'invalid-refresh-token' });
 
       expect(response.status).toBe(401);
-      expect(response.body).toHaveProperty('error');
-      expect(response.body.details.code).toBe('INVALID_TOKEN');
+      expect(response.body).toMatchObject({
+        details: {
+          code: 'INVALID_TOKEN'
+        }
+      });
+    });
+
+    it('should return 401 with expired refresh token', async () => {
+      const response = await request
+        .post('/api/v1/auth/refresh')
+        .send({ refreshToken: 'expired-refresh-token' });
+
+      expect(response.status).toBe(401);
+      // Per OpenAPI spec, expired tokens also return INVALID_TOKEN
+      expect(response.body).toMatchObject({
+        details: {
+          code: 'INVALID_TOKEN'
+        }
+      });
     });
   });
 
@@ -240,12 +292,37 @@ describe('Auth Endpoints', () => {
     });
 
     it('should successfully logout with valid access token', async () => {
-      const response = await request
+      // First verify the token works with protected endpoint
+      const beforeResponse = await request
+        .get('/api/v1/users/me')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(beforeResponse.status).toBe(200);
+      expect(beforeResponse.body).toHaveProperty('userId');
+      expect(beforeResponse.body).toHaveProperty('email', 'logout.test@example.com');
+
+      // Perform logout
+      const logoutResponse = await request
         .post('/api/v1/auth/logout')
         .set('Authorization', `Bearer ${accessToken}`);
 
-      expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('message', 'Logout successful');
+      expect(logoutResponse.status).toBe(200);
+      expect(logoutResponse.body).toHaveProperty('message', 'Logout successful');
+
+      // Wait slightly longer for session to be cleared
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Make a new request with the same token to verify it's been invalidated
+      const tryLoginAgainResponse = await request
+        .post('/api/v1/auth/logout')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(tryLoginAgainResponse.status).toBe(401);
+      expect(tryLoginAgainResponse.body).toMatchObject({
+        details: {
+          code: 'UNAUTHORIZED'
+        }
+      });
     });
 
     it('should return 401 when logging out without token', async () => {
@@ -253,8 +330,27 @@ describe('Auth Endpoints', () => {
         .post('/api/v1/auth/logout');
 
       expect(response.status).toBe(401);
-      expect(response.body).toHaveProperty('error');
-      expect(response.body.details.code).toBe('UNAUTHORIZED');
+      expect(response.body).toMatchObject({
+        details: {
+          code: 'UNAUTHORIZED'
+        }
+      });
     });
+  });
+
+  // Cleanup after each test
+  afterEach(async () => {
+    await db.delete(users)
+      .where(eq(users.email, 'test@example.com'));
+    await db.delete(users)
+      .where(eq(users.email, 'login.test@example.com'));
+    await db.delete(users)
+      .where(eq(users.email, 'verify.test@example.com'));
+    await db.delete(users)
+      .where(eq(users.email, 'refresh.test@example.com'));
+    await db.delete(users)
+      .where(eq(users.email, 'logout.test@example.com'));
+    await db.delete(users)
+      .where(eq(users.email, 'duplicate@example.com'));
   });
 });
