@@ -113,4 +113,43 @@ router.get('/:userId', isAuthenticated, async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * @route POST /users/:userId/reactivate
+ * @desc Reactivate a previously deactivated user
+ */
+router.post('/:userId/reactivate', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    const [user] = await db.update(users)
+      .set({
+        deactivated: false,
+        updatedAt: new Date()
+      })
+      .where(eq(users.userId, parseInt(userId)))
+      .returning();
+
+    if (!user) {
+      return res.status(404).json({
+        error: "User Not Found",
+        details: {
+          code: "USER_NOT_FOUND",
+          message: "The requested user does not exist"
+        }
+      });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Error reactivating user:', error);
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: {
+        code: "SERVER_ERROR",
+        message: "Failed to reactivate user"
+      }
+    });
+  }
+});
+
 export { router as userRouter };
