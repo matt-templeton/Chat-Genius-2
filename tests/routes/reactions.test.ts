@@ -24,7 +24,7 @@ describe('Reaction Endpoints', () => {
 
   beforeEach(async () => {
     try {
-      // Create test user with timestamp to ensure unique email
+      // Create test user
       const timestamp = new Date().getTime();
       const passwordHash = await bcrypt.hash(testPassword, 10);
 
@@ -33,101 +33,54 @@ describe('Reaction Endpoints', () => {
           email: `reaction.test.${timestamp}@example.com`,
           passwordHash,
           displayName: 'Reaction Test User',
-          emailVerified: true,
-          deactivated: false,
-          lastKnownPresence: 'ONLINE',
-          lastLogin: new Date(),
-          createdAt: new Date(),
-          updatedAt: new Date()
+          emailVerified: true
         })
         .returning();
 
-      // Verify user creation
-      expect(user).toBeDefined();
-      expect(user.userId).toBeDefined();
-      expect(typeof parseInt(user.userId.toString())).toBe('number');
-      expect(user.email).toContain('reaction.test');
       testUser = user;
 
       // Create test workspace
       const [workspace] = await db.insert(workspaces)
         .values({
           name: `Test Workspace ${timestamp}`,
-          description: 'Test workspace for reaction endpoints',
-          archived: false,
-          createdAt: new Date(),
-          updatedAt: new Date()
+          description: 'Test workspace for reaction endpoints'
         })
         .returning();
 
-      // Verify workspace creation
-      expect(workspace).toBeDefined();
-      expect(workspace.workspaceId).toBeDefined();
-      expect(typeof parseInt(workspace.workspaceId.toString())).toBe('number');
-      expect(workspace.name).toContain('Test Workspace');
       testWorkspace = workspace;
 
       // Create test channel
       const [channel] = await db.insert(channels)
         .values({
           name: `test-channel-${timestamp}`,
-          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
+          workspaceId: testWorkspace.workspaceId,
           topic: 'Test Channel Topic',
-          channelType: 'PUBLIC',
-          archived: false,
-          createdAt: new Date(),
-          updatedAt: new Date()
+          channelType: 'PUBLIC'
         })
         .returning();
 
-      // Verify channel creation
-      expect(channel).toBeDefined();
-      expect(channel.channelId).toBeDefined();
-
-      // Handle potentially null workspaceId
-      if (!channel.workspaceId) {
-        throw new Error('Channel created without workspaceId');
-      }
-
-      expect(typeof parseInt(channel.channelId.toString())).toBe('number');
-      expect(typeof parseInt(channel.workspaceId.toString())).toBe('number');
-      expect(parseInt(channel.workspaceId.toString())).toBe(parseInt(testWorkspace.workspaceId.toString()));
       testChannel = channel;
 
       // Create test message
       const [message] = await db.insert(messages)
         .values({
-          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
-          channelId: parseInt(testChannel.channelId.toString()),
-          userId: parseInt(testUser.userId.toString()),
-          content: 'Test message for reactions',
-          deleted: false,
-          postedAt: new Date(),
-          createdAt: new Date(),
-          updatedAt: new Date()
+          workspaceId: testWorkspace.workspaceId,
+          channelId: testChannel.channelId,
+          userId: testUser.userId,
+          content: 'Test message for reactions'
         })
         .returning();
 
-      // Verify message creation
-      expect(message).toBeDefined();
-      expect(message.messageId).toBeDefined();
-      expect(message.content).toBe('Test message for reactions');
       testMessage = message;
 
       // Create test emoji
       const [emoji] = await db.insert(emojis)
         .values({
           code: `:test-emoji-${timestamp}:`,
-          deleted: false,
-          createdAt: new Date(),
-          updatedAt: new Date()
+          deleted: false
         })
         .returning();
 
-      // Verify emoji creation
-      expect(emoji).toBeDefined();
-      expect(emoji.emojiId).toBeDefined();
-      expect(emoji.code).toContain('test-emoji');
       testEmoji = emoji;
 
       // Login to get access token
@@ -138,16 +91,9 @@ describe('Reaction Endpoints', () => {
           password: testPassword
         });
 
-      if (loginResponse.status !== 200) {
-        console.error('Login failed:', loginResponse.body);
-        throw new Error(`Login failed with status ${loginResponse.status}`);
-      }
-
       expect(loginResponse.status).toBe(200);
       expect(loginResponse.body).toHaveProperty('accessToken');
       accessToken = loginResponse.body.accessToken;
-      expect(accessToken).toBeDefined();
-      expect(typeof accessToken).toBe('string');
 
     } catch (error) {
       console.error('Test setup failed:', error);
@@ -165,6 +111,10 @@ describe('Reaction Endpoints', () => {
         });
 
       expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty('messageId', testMessage.messageId);
+      expect(response.body).toHaveProperty('workspaceId', testMessage.workspaceId);
+      expect(response.body).toHaveProperty('emojiId', testEmoji.emojiId);
+      expect(response.body).toHaveProperty('userId', testUser.userId);
     });
 
     it('should prevent duplicate reactions from the same user', async () => {
@@ -232,6 +182,17 @@ describe('Reaction Endpoints', () => {
         .set('Authorization', `Bearer ${accessToken}`);
 
       expect(response.status).toBe(204);
+
+      // Verify reaction was deleted
+      const reactions = await db.query.messageReactions.findMany({
+        where: and(
+          eq(messageReactions.messageId, testMessage.messageId),
+          eq(messageReactions.workspaceId, testMessage.workspaceId),
+          eq(messageReactions.emojiId, testEmoji.emojiId),
+          eq(messageReactions.userId, testUser.userId)
+        )
+      });
+      expect(reactions.length).toBe(0);
     });
 
     it('should return 404 for non-existent message', async () => {
@@ -246,7 +207,7 @@ describe('Reaction Endpoints', () => {
 
   describe('GET /api/v1/messages/:messageId/reactions', () => {
     beforeEach(async () => {
-      // Add some reactions to list
+      // Add a reaction to list
       await request
         .post(`/api/v1/messages/${testMessage.messageId}/reactions`)
         .set('Authorization', `Bearer ${accessToken}`)
@@ -263,7 +224,10 @@ describe('Reaction Endpoints', () => {
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
+      expect(response.body[0]).toHaveProperty('messageId', testMessage.messageId);
+      expect(response.body[0]).toHaveProperty('workspaceId', testMessage.workspaceId);
       expect(response.body[0]).toHaveProperty('emojiId', testEmoji.emojiId);
+      expect(response.body[0]).toHaveProperty('userId', testUser.userId);
     });
 
     it('should return 404 for non-existent message', async () => {
@@ -278,25 +242,27 @@ describe('Reaction Endpoints', () => {
 
   afterEach(async () => {
     try {
-      if (testWorkspace?.workspaceId) {
-        // Clean up test data in reverse order of creation
-        await db.delete(messageReactions)
-          .where(eq(messageReactions.workspaceId, parseInt(testWorkspace.workspaceId.toString())));
-        await db.delete(messages)
-          .where(eq(messages.workspaceId, parseInt(testWorkspace.workspaceId.toString())));
-        await db.delete(channels)
-          .where(eq(channels.workspaceId, parseInt(testWorkspace.workspaceId.toString())));
-        await db.delete(workspaces)
-          .where(eq(workspaces.workspaceId, parseInt(testWorkspace.workspaceId.toString())));
-      }
-      if (testEmoji?.emojiId) {
-        await db.delete(emojis)
-          .where(eq(emojis.emojiId, parseInt(testEmoji.emojiId.toString())));
-      }
-      if (testUser?.email) {
-        await db.delete(users)
-          .where(eq(users.email, testUser.email));
-      }
+      // Clean up test data in reverse order of creation
+      await db.delete(messageReactions)
+        .where(and(
+          eq(messageReactions.messageId, testMessage.messageId),
+          eq(messageReactions.workspaceId, testMessage.workspaceId)
+        ));
+
+      await db.delete(messages)
+        .where(eq(messages.messageId, testMessage.messageId));
+
+      await db.delete(emojis)
+        .where(eq(emojis.emojiId, testEmoji.emojiId));
+
+      await db.delete(channels)
+        .where(eq(channels.channelId, testChannel.channelId));
+
+      await db.delete(workspaces)
+        .where(eq(workspaces.workspaceId, testWorkspace.workspaceId));
+
+      await db.delete(users)
+        .where(eq(users.userId, testUser.userId));
     } catch (error) {
       console.error('Test cleanup failed:', error);
       throw error;

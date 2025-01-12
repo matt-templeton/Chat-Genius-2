@@ -16,7 +16,7 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
     const { messageId } = req.params;
     const { emojiId } = req.body;
 
-    // First get the message to get its workspaceId
+    // First get the message to verify it exists and get its workspaceId
     const message = await db.query.messages.findFirst({
       where: eq(messages.messageId, parseInt(messageId))
     });
@@ -34,7 +34,7 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
     // Verify emoji exists and is not deleted
     const emoji = await db.query.emojis.findFirst({
       where: and(
-        eq(emojis.emojiId, emojiId),
+        eq(emojis.emojiId, parseInt(emojiId)),
         eq(emojis.deleted, false)
       )
     });
@@ -53,8 +53,7 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
     const existingReaction = await db.query.messageReactions.findFirst({
       where: and(
         eq(messageReactions.messageId, parseInt(messageId)),
-        eq(messageReactions.workspaceId, message.workspaceId),
-        eq(messageReactions.emojiId, emojiId),
+        eq(messageReactions.emojiId, parseInt(emojiId)),
         eq(messageReactions.userId, req.user!.userId)
       )
     });
@@ -69,15 +68,16 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
       });
     }
 
-    // Add the reaction
-    const [reaction] = await db.insert(messageReactions).values({
-      messageId: parseInt(messageId),
-      workspaceId: message.workspaceId!,
-      emojiId: parseInt(emojiId.toString()),
-      userId: req.user!.userId,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }).returning();
+    // Add the reaction with workspaceId from the message
+    const [reaction] = await db
+      .insert(messageReactions)
+      .values({
+        messageId: parseInt(messageId),
+        workspaceId: message.workspaceId,
+        emojiId: parseInt(emojiId),
+        userId: req.user!.userId
+      })
+      .returning();
 
     res.status(201).json(reaction);
   } catch (error) {
@@ -111,7 +111,7 @@ router.delete('/:messageId/reactions/:emojiId', isAuthenticated, async (req: Req
   try {
     const { messageId, emojiId } = req.params;
 
-    // First get the message to get its workspaceId
+    // First get the message to verify it exists and get its workspaceId
     const message = await db.query.messages.findFirst({
       where: eq(messages.messageId, parseInt(messageId))
     });
@@ -122,6 +122,25 @@ router.delete('/:messageId/reactions/:emojiId', isAuthenticated, async (req: Req
         details: {
           code: "MESSAGE_NOT_FOUND",
           message: "The specified message does not exist"
+        }
+      });
+    }
+
+    // Check if reaction exists before trying to delete
+    const existingReaction = await db.query.messageReactions.findFirst({
+      where: and(
+        eq(messageReactions.messageId, parseInt(messageId)),
+        eq(messageReactions.emojiId, parseInt(emojiId)),
+        eq(messageReactions.userId, req.user!.userId)
+      )
+    });
+
+    if (!existingReaction) {
+      return res.status(404).json({
+        error: "Reaction Not Found",
+        details: {
+          code: "REACTION_NOT_FOUND",
+          message: "The specified reaction does not exist"
         }
       });
     }
@@ -156,7 +175,7 @@ router.get('/:messageId/reactions', isAuthenticated, async (req: Request, res: R
   try {
     const { messageId } = req.params;
 
-    // First get the message to get its workspaceId
+    // First get the message to verify it exists and get its workspaceId
     const message = await db.query.messages.findFirst({
       where: eq(messages.messageId, parseInt(messageId))
     });
