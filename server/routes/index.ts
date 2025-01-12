@@ -1,11 +1,15 @@
 import { Router } from 'express';
 import { authRouter } from './auth';
+import { userRouter } from './users';
+import { workspaceRouter } from './workspaces';
+import { channelRouter } from './channels';
+import { messageRouter } from './messages';
 
 // Export individual routers
-export { authRouter };
-
-// We'll add more route exports here as we create them:
-// export { userRouter } from './users';
-// export { workspaceRouter } from './workspaces';
-// export { channelRouter } from './channels';
-// export { messageRouter } from './messages';
+export {
+  authRouter,
+  userRouter,
+  workspaceRouter,
+  channelRouter,
+  messageRouter
+};

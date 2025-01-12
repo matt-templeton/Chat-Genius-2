@@ -3,10 +3,7 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import MemoryStore from "memorystore";
 import passport from './middleware/auth';
-import { authRouter } from './routes/auth';
-import { userRouter } from './routes/users';
-import { workspaceRouter } from './routes/workspaces';
-import { channelRouter } from './routes/channels';
+import { authRouter, userRouter, workspaceRouter, channelRouter, messageRouter } from './routes/index';
 
 const MemoryStoreSession = MemoryStore(session);
 
@@ -34,6 +31,7 @@ export function registerRoutes(app: Express): Server {
   app.use('/api/v1/users', userRouter);
   app.use('/api/v1/workspaces', workspaceRouter);
   app.use('/api/v1/channels', channelRouter);
+  app.use('/api/v1/messages', messageRouter);
 
   // Create HTTP server
   const httpServer = createServer(app);
