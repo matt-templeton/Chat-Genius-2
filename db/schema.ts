@@ -1,6 +1,6 @@
 import { 
   pgTable, 
-  serial,
+  bigserial,
   varchar, 
   text, 
   boolean, 
@@ -22,7 +22,7 @@ export const channelTypeEnum = pgEnum('channel_type_enum', ['PUBLIC', 'PRIVATE',
 
 // Users table
 export const users = pgTable('Users', {
-  userId: serial('userId').primaryKey(),
+  userId: bigserial('userId', { mode: "bigint" }).primaryKey(),
   email: varchar('email', { length: 254 }).notNull().unique(),
   passwordHash: varchar('passwordHash', { length: 255 }),
   displayName: varchar('displayName', { length: 50 }).notNull(),
@@ -39,7 +39,7 @@ export const users = pgTable('Users', {
 
 // Workspaces table
 export const workspaces = pgTable('Workspaces', {
-  workspaceId: serial('workspaceId').primaryKey(),
+  workspaceId: bigserial('workspaceId', { mode: "bigint" }).primaryKey(),
   name: varchar('name', { length: 100 }).notNull(),
   description: text('description'),
   archived: boolean('archived').default(false),
@@ -49,7 +49,7 @@ export const workspaces = pgTable('Workspaces', {
 
 // Channels table
 export const channels = pgTable('Channels', {
-  channelId: serial('channelId').primaryKey(),
+  channelId: bigserial('channelId', { mode: "bigint" }).primaryKey(),
   workspaceId: integer('workspaceId').references(() => workspaces.workspaceId, { onDelete: 'set null' }),
   name: varchar('name', { length: 100 }).notNull(),
   topic: text('topic'),
@@ -61,7 +61,7 @@ export const channels = pgTable('Channels', {
 
 // Messages table (partitioned by workspaceId)
 export const messages = pgTable('Messages', {
-  messageId: serial('messageId'),
+  messageId: bigserial('messageId', { mode: "bigint" }),
   userId: integer('userId').references(() => users.userId, { onDelete: 'set null' }),
   channelId: integer('channelId').references(() => channels.channelId, { onDelete: 'set null' }),
   workspaceId: integer('workspaceId').notNull().references(() => workspaces.workspaceId, { onDelete: 'cascade' }),
@@ -86,7 +86,7 @@ export const messages = pgTable('Messages', {
 
 // Files table
 export const files = pgTable('Files', {
-  fileId: serial('fileId').primaryKey(),
+  fileId: bigserial('fileId', { mode: "bigint" }).primaryKey(),
   userId: integer('userId').references(() => users.userId, { onDelete: 'set null' }),
   messageId: integer('messageId'),
   workspaceId: integer('workspaceId'),
@@ -107,7 +107,7 @@ export const files = pgTable('Files', {
 
 // Emojis table
 export const emojis = pgTable('Emojis', {
-  emojiId: serial('emojiId').primaryKey(),
+  emojiId: bigserial('emojiId', { mode: "bigint" }).primaryKey(),
   code: varchar('code', { length: 50 }).notNull().unique(),
   deleted: boolean('deleted').default(false),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
@@ -116,7 +116,7 @@ export const emojis = pgTable('Emojis', {
 
 // Message Reactions table
 export const messageReactions = pgTable('MessageReactions', {
-  reactionId: serial('reactionId').primaryKey(),
+  reactionId: bigserial('reactionId', { mode: "bigint" }).primaryKey(),
   messageId: integer('messageId'),
   workspaceId: integer('workspaceId'),
   emojiId: integer('emojiId').references(() => emojis.emojiId, { onDelete: 'set null' }).notNull(),
@@ -163,7 +163,7 @@ export const userChannels = pgTable('UserChannels', {
 
 // Pinned Messages table
 export const pinnedMessages = pgTable('PinnedMessages', {
-  pinnedId: serial('pinnedId').primaryKey(),
+  pinnedId: bigserial('pinnedId', { mode: "bigint" }).primaryKey(),
   messageId: integer('messageId'),
   workspaceId: integer('workspaceId'),
   pinnedBy: integer('pinnedBy').references(() => users.userId, { onDelete: 'set null' }),
