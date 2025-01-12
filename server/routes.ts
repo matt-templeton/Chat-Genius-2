@@ -13,7 +13,8 @@ import {
   messageRouter,
   reactionRouter,
   fileRouter,
-  pinRouter 
+  pinRouter,
+  emojiRouter 
 } from './routes/index';
 import express from 'express';
 
@@ -66,7 +67,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(`${apiPrefix}/messages`, reactionRouter);
   app.use(`${apiPrefix}/messages`, pinRouter);
 
+  // Mount file and emoji routes
   app.use(`${apiPrefix}/files`, fileRouter);
+  app.use(`${apiPrefix}/emojis`, emojiRouter);
 
   // Create HTTP server
   const httpServer = createServer(app);
