@@ -1,11 +1,17 @@
 import { Router } from 'express';
 import { db } from "@db";
-import { pinnedMessages, messages } from "@db/schema";
+import { pinnedMessages, messages, channels } from "@db/schema";
 import { eq, and } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
+import { z } from "zod";
 
 const router = Router();
+
+// Validation schema for pin reason
+const pinReasonSchema = z.object({
+  reason: z.string().min(1).max(500)
+});
 
 /**
  * @route POST /messages/:messageId/pin
@@ -14,7 +20,20 @@ const router = Router();
 router.post('/:messageId/pin', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { messageId } = req.params;
-    const { reason } = req.body;
+
+    // Validate pin reason
+    const validation = pinReasonSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({
+        error: "Invalid Pin Reason",
+        details: {
+          code: "INVALID_PIN_REASON",
+          message: "Pin reason must be between 1 and 500 characters"
+        }
+      });
+    }
+
+    const { reason } = validation.data;
 
     // First get the message to get its workspaceId
     const message = await db.query.messages.findFirst({
@@ -116,25 +135,50 @@ router.delete('/:messageId/pin', isAuthenticated, async (req: Request, res: Resp
 });
 
 /**
- * @route GET /channels/:channelId/pins
+ * @route GET /messages/channel/:channelId/pins
  * @desc Get all pinned messages in a channel
  */
 router.get('/channel/:channelId/pins', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { channelId } = req.params;
 
+    // Verify channel exists
+    const channel = await db.query.channels.findFirst({
+      where: eq(channels.channelId, parseInt(channelId))
+    });
+
+    if (!channel) {
+      return res.status(404).json({
+        error: "Channel Not Found",
+        details: {
+          code: "CHANNEL_NOT_FOUND",
+          message: "The specified channel does not exist"
+        }
+      });
+    }
+
     // Get messages from this channel that are pinned
-    const pinnedMessagesList = await db.select()
-      .from(messages)
-      .innerJoin(
-        pinnedMessages,
-        and(
-          eq(messages.messageId, pinnedMessages.messageId),
-          eq(messages.workspaceId, pinnedMessages.workspaceId)
-        )
+    const pinnedMessagesList = await db.select({
+      messageId: messages.messageId,
+      workspaceId: messages.workspaceId,
+      channelId: messages.channelId,
+      content: messages.content,
+      userId: messages.userId,
+      pinnedId: pinnedMessages.pinnedId,
+      pinnedBy: pinnedMessages.pinnedBy,
+      pinnedReason: pinnedMessages.pinnedReason,
+      pinnedAt: pinnedMessages.pinnedAt
+    })
+    .from(messages)
+    .innerJoin(
+      pinnedMessages,
+      and(
+        eq(messages.messageId, pinnedMessages.messageId),
+        eq(messages.workspaceId, pinnedMessages.workspaceId)
       )
-      .where(eq(messages.channelId, parseInt(channelId)))
-      .orderBy(pinnedMessages.pinnedAt);
+    )
+    .where(eq(messages.channelId, parseInt(channelId)))
+    .orderBy(pinnedMessages.pinnedAt);
 
     res.json(pinnedMessagesList);
   } catch (error) {
