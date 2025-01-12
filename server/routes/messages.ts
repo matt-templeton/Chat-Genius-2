@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from "@db";
 import { messages, channels } from "@db/schema";
-import { eq, and, desc, lt } from "drizzle-orm";
+import { eq, and, desc, lt, sql } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
 
@@ -33,7 +33,7 @@ router.get('/channel/:channelId', isAuthenticated, async (req: Request, res: Res
 
     let conditions = [
       eq(messages.channelId, parseInt(channelId)),
-      eq(messages.workspaceId, channel.workspaceId)
+      eq(messages.workspaceId, channel.workspaceId!)
     ];
 
     if (!includeDeleted) {
@@ -46,7 +46,7 @@ router.get('/channel/:channelId', isAuthenticated, async (req: Request, res: Res
 
     const messagesList = await db.query.messages.findMany({
       where: and(...conditions),
-      orderBy: desc(messages.postedAt),
+      orderBy: [desc(messages.postedAt)],
       limit: parseInt(limit as string),
       offset: parseInt(offset as string)
     });
@@ -78,7 +78,7 @@ router.post('/channel/:channelId', isAuthenticated, async (req: Request, res: Re
       where: eq(channels.channelId, parseInt(channelId))
     });
 
-    if (!channel) {
+    if (!channel || !channel.workspaceId) {
       return res.status(404).json({
         error: "Channel Not Found",
         details: {
@@ -108,6 +108,8 @@ router.post('/channel/:channelId', isAuthenticated, async (req: Request, res: Re
       }
     }
 
+    const now = new Date();
+
     // Insert the message
     const [message] = await db.insert(messages)
       .values({
@@ -115,8 +117,11 @@ router.post('/channel/:channelId', isAuthenticated, async (req: Request, res: Re
         channelId: parseInt(channelId),
         userId: req.user!.userId,
         content,
-        parentMessageId: parentMessageId ? parseInt(parentMessageId) : undefined,
-        deleted: false
+        parentMessageId: parentMessageId ? parseInt(parentMessageId) : null,
+        deleted: false,
+        postedAt: now,
+        createdAt: now,
+        updatedAt: now
       })
       .returning();
 
@@ -141,7 +146,6 @@ router.get('/:messageId', isAuthenticated, async (req: Request, res: Response) =
   try {
     const { messageId } = req.params;
 
-    // Note: Without workspaceId we need to search across all workspaces
     const message = await db.query.messages.findFirst({
       where: eq(messages.messageId, parseInt(messageId))
     });
@@ -183,7 +187,7 @@ router.put('/:messageId', isAuthenticated, async (req: Request, res: Response) =
       where: eq(messages.messageId, parseInt(messageId))
     });
 
-    if (!existingMessage) {
+    if (!existingMessage || !existingMessage.workspaceId) {
       return res.status(404).json({
         error: "Message Not Found",
         details: {
@@ -230,7 +234,7 @@ router.delete('/:messageId', isAuthenticated, async (req: Request, res: Response
       where: eq(messages.messageId, parseInt(messageId))
     });
 
-    if (!existingMessage) {
+    if (!existingMessage || !existingMessage.workspaceId) {
       return res.status(404).json({
         error: "Message Not Found",
         details: {
@@ -240,7 +244,7 @@ router.delete('/:messageId', isAuthenticated, async (req: Request, res: Response
       });
     }
 
-    const [message] = await db.update(messages)
+    await db.update(messages)
       .set({
         deleted: true,
         updatedAt: new Date()
@@ -248,8 +252,7 @@ router.delete('/:messageId', isAuthenticated, async (req: Request, res: Response
       .where(and(
         eq(messages.messageId, parseInt(messageId)),
         eq(messages.workspaceId, existingMessage.workspaceId)
-      ))
-      .returning();
+      ));
 
     res.status(204).send();
   } catch (error) {

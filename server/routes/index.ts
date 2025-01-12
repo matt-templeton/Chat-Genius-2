@@ -4,6 +4,9 @@ import { userRouter } from './users';
 import { workspaceRouter } from './workspaces';
 import { channelRouter } from './channels';
 import { messageRouter } from './messages';
+import { reactionRouter } from './reactions';
+import { fileRouter } from './files';
+import { pinRouter } from './pins';
 
 // Export individual routers
 export {
@@ -11,5 +14,8 @@ export {
   userRouter,
   workspaceRouter,
   channelRouter,
-  messageRouter
+  messageRouter,
+  reactionRouter,
+  fileRouter,
+  pinRouter
 };

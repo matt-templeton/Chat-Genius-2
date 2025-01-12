@@ -3,11 +3,34 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import MemoryStore from "memorystore";
 import passport from './middleware/auth';
-import { authRouter, userRouter, workspaceRouter, channelRouter, messageRouter } from './routes/index';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { 
+  authRouter, 
+  userRouter, 
+  workspaceRouter, 
+  channelRouter, 
+  messageRouter,
+  reactionRouter,
+  fileRouter,
+  pinRouter 
+} from './routes/index';
+import express from 'express';
 
 const MemoryStoreSession = MemoryStore(session);
 
-export function registerRoutes(app: Express): Server {
+export async function registerRoutes(app: Express): Promise<Server> {
+  // Create uploads directory if it doesn't exist
+  const uploadsDir = path.join(process.cwd(), 'uploads');
+  try {
+    await fs.access(uploadsDir);
+  } catch {
+    await fs.mkdir(uploadsDir, { recursive: true });
+  }
+
+  // Serve static files from uploads directory
+  app.use('/uploads', express.static(uploadsDir));
+
   // Session middleware
   app.use(session({
     store: new MemoryStoreSession({
@@ -32,6 +55,9 @@ export function registerRoutes(app: Express): Server {
   app.use('/api/v1/workspaces', workspaceRouter);
   app.use('/api/v1/channels', channelRouter);
   app.use('/api/v1/messages', messageRouter);
+  app.use('/api/v1/messages', reactionRouter); // Mount under /messages for reactions
+  app.use('/api/v1/messages', pinRouter); // Mount under /messages for pins
+  app.use('/api/v1/files', fileRouter);
 
   // Create HTTP server
   const httpServer = createServer(app);
