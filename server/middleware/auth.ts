@@ -5,6 +5,10 @@ import { users } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { compare } from "bcrypt";
 import type { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+
+// JWT Configuration from auth.ts
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // Extend the Express.User interface without recursion
 declare global {
@@ -98,11 +102,58 @@ passport.deserializeUser(async (id: number, done) => {
   }
 });
 
-// Middleware to check if user is authenticated
-export const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
+// Helper function to extract token from Authorization header
+function extractToken(req: Request): string | null {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7); // Remove 'Bearer ' prefix
+  }
+  return null;
+}
+
+// Helper function to validate JWT token and attach user
+async function validateJwtToken(req: Request): Promise<boolean> {
+  const token = extractToken(req);
+  if (!token) return false;
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
+    const user = await db.query.users.findFirst({
+      where: eq(users.userId, decoded.userId)
+    });
+
+    if (!user) return false;
+
+    // Attach user to request
+    req.user = {
+      userId: user.userId,
+      email: user.email,
+      displayName: user.displayName,
+      emailVerified: user.emailVerified || false,
+      deactivated: user.deactivated || false,
+      lastKnownPresence: user.lastKnownPresence || 'OFFLINE'
+    };
+
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+// Middleware to check if user is authenticated via session or JWT
+export const isAuthenticated = async (req: Request, res: Response, next: NextFunction) => {
+  // First check session authentication
   if (req.isAuthenticated()) {
     return next();
   }
+
+  // Then check JWT token
+  const isValidToken = await validateJwtToken(req);
+  if (isValidToken) {
+    return next();
+  }
+
+  // If neither authentication method is valid, return unauthorized
   res.status(401).json({
     error: "Unauthorized",
     details: {

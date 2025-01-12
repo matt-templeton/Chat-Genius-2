@@ -9,27 +9,33 @@ jest.setTimeout(30000);
 // Global setup before all tests
 beforeAll(async () => {
   // Database is already configured through the DATABASE_URL environment variable
-  // We can add additional setup here if needed
+  // Clean up any existing test data
+  await db.delete(users).where(eq(users.email, 'test@example.com'));
+  await db.delete(users).where(eq(users.email, 'login.test@example.com'));
+  await db.delete(users).where(eq(users.email, 'verify.test@example.com'));
+  await db.delete(users).where(eq(users.email, 'refresh.test@example.com'));
+  await db.delete(users).where(eq(users.email, 'logout.test@example.com'));
+  await db.delete(users).where(eq(users.email, 'duplicate@example.com'));
 });
 
-// Cleanup after all tests
-afterAll(async () => {
-  // Add cleanup logic if needed
-});
-
-// Reset state between tests
+// Cleanup after each test
 afterEach(async () => {
   // Clean up test data after each test
-  // Note: We're using soft deletes, so we'll mark test data as deleted/archived
-  try {
-    const testUsers = await db.query.users.findMany({
-      where: eq(users.email, 'test@example.com')
-    });
+  await db.delete(users).where(eq(users.email, 'test@example.com'));
+  await db.delete(users).where(eq(users.email, 'login.test@example.com'));
+  await db.delete(users).where(eq(users.email, 'verify.test@example.com'));
+  await db.delete(users).where(eq(users.email, 'refresh.test@example.com'));
+  await db.delete(users).where(eq(users.email, 'logout.test@example.com'));
+  await db.delete(users).where(eq(users.email, 'duplicate@example.com'));
+});
 
-    for (const user of testUsers) {
-      await db.update(users).set({ deactivated: true }).where(eq(users.userId, user.userId));
-    }
-  } catch (error) {
-    console.error('Error cleaning up test data:', error);
-  }
+// Final cleanup
+afterAll(async () => {
+  // Clean up all test data one final time
+  await db.delete(users).where(eq(users.email, 'test@example.com'));
+  await db.delete(users).where(eq(users.email, 'login.test@example.com'));
+  await db.delete(users).where(eq(users.email, 'verify.test@example.com'));
+  await db.delete(users).where(eq(users.email, 'refresh.test@example.com'));
+  await db.delete(users).where(eq(users.email, 'logout.test@example.com'));
+  await db.delete(users).where(eq(users.email, 'duplicate@example.com'));
 });
