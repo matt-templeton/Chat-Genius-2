@@ -5,6 +5,8 @@ import MemoryStore from "memorystore";
 import passport from './middleware/auth';
 import { authRouter } from './routes/auth';
 import { userRouter } from './routes/users';
+import { workspaceRouter } from './routes/workspaces';
+import { channelRouter } from './routes/channels';
 
 const MemoryStoreSession = MemoryStore(session);
 
@@ -30,6 +32,8 @@ export function registerRoutes(app: Express): Server {
   // Mount all routes under /api/v1 prefix
   app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/users', userRouter);
+  app.use('/api/v1/workspaces', workspaceRouter);
+  app.use('/api/v1/channels', channelRouter);
 
   // Create HTTP server
   const httpServer = createServer(app);

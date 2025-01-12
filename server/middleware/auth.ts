@@ -1,14 +1,22 @@
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { db } from "@db";
-import { users, type User } from "@db/schema";
+import { users } from "@db/schema";
 import { eq } from "drizzle-orm";
 import { compare } from "bcrypt";
 import type { Request, Response, NextFunction } from 'express';
 
+// Extend the Express.User interface without recursion
 declare global {
   namespace Express {
-    interface User extends User {}
+    interface User {
+      userId: number;
+      email: string;
+      displayName: string;
+      emailVerified: boolean;
+      deactivated: boolean;
+      lastKnownPresence: "ONLINE" | "AWAY" | "DND" | "OFFLINE";
+    }
   }
 }
 
@@ -41,7 +49,17 @@ passport.use(new LocalStrategy(
         return done(null, false, { message: 'INVALID_CREDENTIALS' });
       }
 
-      return done(null, user);
+      // Only pass necessary user info to session
+      const sessionUser: Express.User = {
+        userId: user.userId,
+        email: user.email,
+        displayName: user.displayName,
+        emailVerified: user.emailVerified || false,
+        deactivated: user.deactivated || false,
+        lastKnownPresence: user.lastKnownPresence || 'OFFLINE'
+      };
+
+      return done(null, sessionUser);
     } catch (error) {
       return done(error);
     }
@@ -49,7 +67,7 @@ passport.use(new LocalStrategy(
 ));
 
 // Serialize user for the session
-passport.serializeUser((user: User, done) => {
+passport.serializeUser((user: Express.User, done) => {
   done(null, user.userId);
 });
 
@@ -59,7 +77,22 @@ passport.deserializeUser(async (id: number, done) => {
     const user = await db.query.users.findFirst({
       where: eq(users.userId, id)
     });
-    done(null, user);
+
+    if (!user) {
+      return done(null, false);
+    }
+
+    // Convert to session user
+    const sessionUser: Express.User = {
+      userId: user.userId,
+      email: user.email,
+      displayName: user.displayName,
+      emailVerified: user.emailVerified || false,
+      deactivated: user.deactivated || false,
+      lastKnownPresence: user.lastKnownPresence || 'OFFLINE'
+    };
+
+    done(null, sessionUser);
   } catch (error) {
     done(error);
   }
