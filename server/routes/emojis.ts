@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from "@db";
 import { emojis } from "@db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, like } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
 import { z } from "zod";
@@ -27,8 +27,6 @@ const paginationSchema = z.object({
  *       - Emojis
  *     summary: List all custom emojis
  *     description: Retrieve a paginated list of all custom emojis (excluding soft-deleted ones)
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: page
@@ -58,17 +56,22 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
     const { page, limit } = paginationSchema.parse(req.query);
     const offset = (page - 1) * limit;
 
+    // Use a where clause to filter out deleted emojis
+    const where = eq(emojis.deleted, false);
+
     const customEmojis = await db.query.emojis.findMany({
-      where: eq(emojis.deleted, false),
+      where,
       limit,
       offset,
       orderBy: [desc(emojis.createdAt)]
     });
 
-    // Get total count for pagination
-    const totalCount = await db.select({ count: sql<number>`count(*)` })
-      .from(emojis)
-      .where(eq(emojis.deleted, false));
+    // Get total count for pagination, excluding deleted emojis
+    const totalCount = await db.select({ 
+      count: sql<number>`cast(count(*) as integer)` 
+    })
+    .from(emojis)
+    .where(where);
 
     res.json({
       data: customEmojis,
@@ -196,8 +199,6 @@ router.post('/', isAuthenticated, async (req: Request, res: Response) => {
  *       - Emojis
  *     summary: Get a specific emoji
  *     description: Retrieve details of a specific emoji by ID
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: emojiId
