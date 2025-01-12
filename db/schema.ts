@@ -24,7 +24,7 @@ export const channelTypeEnum = pgEnum('channel_type_enum', ['PUBLIC', 'PRIVATE',
 export const users = pgTable('Users', {
   userId: serial('userId').primaryKey(),
   email: varchar('email', { length: 254 }).notNull().unique(),
-  passwordHash: varchar('passwordHash', { length: 255 }).notNull(),
+  passwordHash: varchar('passwordHash', { length: 255 }),
   displayName: varchar('displayName', { length: 50 }).notNull(),
   profilePicture: varchar('profilePicture', { length: 255 }),
   statusMessage: varchar('statusMessage', { length: 150 }),
@@ -59,26 +59,37 @@ export const channels = pgTable('Channels', {
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 });
 
-// Messages table
+// Messages table (partitioned by workspaceId)
 export const messages = pgTable('Messages', {
-  messageId: serial('messageId').primaryKey(),
-  channelId: integer('channelId').references(() => channels.channelId, { onDelete: 'set null' }),
+  messageId: serial('messageId'),
   userId: integer('userId').references(() => users.userId, { onDelete: 'set null' }),
-  workspaceId: integer('workspaceId').references(() => workspaces.workspaceId, { onDelete: 'cascade' }),
+  channelId: integer('channelId').references(() => channels.channelId, { onDelete: 'set null' }),
+  workspaceId: integer('workspaceId').notNull().references(() => workspaces.workspaceId, { onDelete: 'cascade' }),
+  parentMessageId: integer('parentMessageId'),
   content: text('content').notNull(),
   deleted: boolean('deleted').default(false),
-  parentMessageId: integer('parentMessageId'),
   postedAt: timestamp('postedAt').defaultNow(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
-});
+}, (table) => ({
+  pk: primaryKey({ columns: [table.messageId, table.workspaceId] }),
+  channelIdx: index('idx_messages_channel_id').on(table.channelId),
+  postedAtIdx: index('idx_messages_posted_at').on(table.postedAt),
+  channelPostedIdx: index('idx_messages_channel_posted_at').on(table.channelId, table.postedAt),
+  parentIdx: index('idx_messages_parent_id').on(table.parentMessageId, table.workspaceId),
+  notDeletedIdx: index('idx_messages_not_deleted').on(table.channelId, table.postedAt).where(sql`${table.deleted} = false`),
+  parentFk: foreignKey({
+    columns: [table.parentMessageId, table.workspaceId],
+    foreignColumns: [table.messageId, table.workspaceId]
+  }).onDelete('set null')
+}));
 
 // Files table
 export const files = pgTable('Files', {
   fileId: serial('fileId').primaryKey(),
   userId: integer('userId').references(() => users.userId, { onDelete: 'set null' }),
-  messageId: integer('messageId').references(() => messages.messageId, { onDelete: 'set null' }),
-  workspaceId: integer('workspaceId').references(() => workspaces.workspaceId, { onDelete: 'set null' }),
+  messageId: integer('messageId'),
+  workspaceId: integer('workspaceId'),
   filename: varchar('filename', { length: 255 }).notNull(),
   fileType: varchar('fileType', { length: 50 }),
   fileUrl: varchar('fileUrl', { length: 255 }),
@@ -87,7 +98,12 @@ export const files = pgTable('Files', {
   uploadTime: timestamp('uploadTime').defaultNow(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
-});
+}, (table) => ({
+  messageFk: foreignKey({
+    columns: [table.messageId, table.workspaceId],
+    foreignColumns: [messages.messageId, messages.workspaceId]
+  }).onDelete('set null')
+}));
 
 // Emojis table
 export const emojis = pgTable('Emojis', {
@@ -101,13 +117,24 @@ export const emojis = pgTable('Emojis', {
 // Message Reactions table
 export const messageReactions = pgTable('MessageReactions', {
   reactionId: serial('reactionId').primaryKey(),
-  messageId: integer('messageId').references(() => messages.messageId, { onDelete: 'set null' }),
-  workspaceId: integer('workspaceId').references(() => workspaces.workspaceId, { onDelete: 'set null' }),
+  messageId: integer('messageId'),
+  workspaceId: integer('workspaceId'),
   emojiId: integer('emojiId').references(() => emojis.emojiId, { onDelete: 'set null' }).notNull(),
   userId: integer('userId').references(() => users.userId, { onDelete: 'set null' }),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
-});
+}, (table) => ({
+  messageFk: foreignKey({
+    columns: [table.messageId, table.workspaceId],
+    foreignColumns: [messages.messageId, messages.workspaceId]
+  }).onDelete('set null'),
+  uniqueReaction: uniqueIndex('idx_reactions_unique').on(
+    table.messageId,
+    table.workspaceId,
+    table.emojiId,
+    table.userId
+  )
+}));
 
 // User Workspaces table
 export const userWorkspaces = pgTable('UserWorkspaces', {
@@ -117,7 +144,8 @@ export const userWorkspaces = pgTable('UserWorkspaces', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 }, (table) => ({
-  pk: primaryKey({ columns: [table.userId, table.workspaceId] })
+  pk: primaryKey({ columns: [table.userId, table.workspaceId] }),
+  workspaceUserIdx: index('idx_user_workspaces_ws_user').on(table.workspaceId, table.userId)
 }));
 
 // User Channels table
@@ -127,22 +155,30 @@ export const userChannels = pgTable('UserChannels', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 }, (table) => ({
-  pk: primaryKey({ columns: [table.userId, table.channelId] })
+  pk: primaryKey({ columns: [table.userId, table.channelId] }),
+  userIdx: index('idx_user_channels_user_id').on(table.userId),
+  channelIdx: index('idx_user_channels_channel_id').on(table.channelId),
+  channelUserIdx: index('idx_user_channels_ch_user').on(table.channelId, table.userId)
 }));
 
 // Pinned Messages table
 export const pinnedMessages = pgTable('PinnedMessages', {
   pinnedId: serial('pinnedId').primaryKey(),
-  messageId: integer('messageId').references(() => messages.messageId, { onDelete: 'set null' }),
-  workspaceId: integer('workspaceId').references(() => workspaces.workspaceId, { onDelete: 'set null' }),
+  messageId: integer('messageId'),
+  workspaceId: integer('workspaceId'),
   pinnedBy: integer('pinnedBy').references(() => users.userId, { onDelete: 'set null' }),
   pinnedReason: text('pinnedReason'),
   pinnedAt: timestamp('pinnedAt').notNull().defaultNow(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
-});
+}, (table) => ({
+  messageFk: foreignKey({
+    columns: [table.messageId, table.workspaceId],
+    foreignColumns: [messages.messageId, messages.workspaceId]
+  }).onDelete('set null')
+}));
 
-// Schema validation
+// Export schemas for validation
 export const insertUserSchema = createInsertSchema(users);
 export const selectUserSchema = createSelectSchema(users);
 export const insertWorkspaceSchema = createInsertSchema(workspaces);
