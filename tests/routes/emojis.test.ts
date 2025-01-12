@@ -23,6 +23,9 @@ describe('Emoji Endpoints', () => {
 
   beforeEach(async () => {
     try {
+      // First clean up all existing emojis to ensure a clean state
+      await db.delete(emojis);
+
       // Create test user with timestamp to ensure unique email
       const timestamp = new Date().getTime();
       const passwordHash = await bcrypt.hash(testPassword, 10);
@@ -73,10 +76,6 @@ describe('Emoji Endpoints', () => {
 
     beforeEach(async () => {
       try {
-        // Clean up any existing test emojis from this specific test run
-        await db.delete(emojis)
-          .where(like(emojis.code, `test_emoji_%_${testTimestamp}`));
-
         // Create multiple test emojis for pagination testing
         const emojiCodes = ['emoji1', 'emoji2', 'emoji3', 'emoji4', 'emoji5'];
         for (const code of emojiCodes) {
@@ -100,11 +99,9 @@ describe('Emoji Endpoints', () => {
         const totalCount = await db.select({ 
           count: sql<number>`cast(count(*) as integer)` 
         })
-          .from(emojis)
-          .where(and(
-            like(emojis.code, `test_emoji_%_${testTimestamp}`),
-            eq(emojis.deleted, false)
-          ));
+        .from(emojis)
+        .where(eq(emojis.deleted, false));
+
         expect(totalCount[0].count).toBe(5);
 
       } catch (error) {
@@ -321,6 +318,7 @@ describe('Emoji Endpoints', () => {
       expect(response.body).toHaveProperty('error');
       expect(response.body.details.code).toBe('UNAUTHORIZED');
     });
+
     it('should validate emoji code format strictly', async () => {
       // Test empty code
       const emptyResponse = await request
@@ -352,13 +350,135 @@ describe('Emoji Endpoints', () => {
     });
   });
 
+  describe('GET /api/v1/emojis/{emojiId}', () => {
+    beforeEach(async () => {
+      const timestamp = new Date().getTime();
+      // Create a test emoji
+      const [emoji] = await db.insert(emojis)
+        .values({
+          code: `test_emoji_details_${timestamp}`,
+          deleted: false,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      expect(emoji).toBeDefined();
+      expect(emoji.emojiId).toBeDefined();
+      testEmoji = emoji;
+    });
+
+    it('should return emoji details', async () => {
+      const response = await request
+        .get(`/api/v1/emojis/${testEmoji.emojiId}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        emojiId: testEmoji.emojiId,
+        code: testEmoji.code,
+        deleted: false
+      });
+      expect(response.body).toHaveProperty('createdAt');
+      expect(response.body).toHaveProperty('updatedAt');
+    });
+
+    it('should return deleted emoji details if it exists', async () => {
+      // First soft delete the emoji
+      await db.update(emojis)
+        .set({ deleted: true, updatedAt: new Date() })
+        .where(eq(emojis.emojiId, testEmoji.emojiId));
+
+      const response = await request
+        .get(`/api/v1/emojis/${testEmoji.emojiId}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        emojiId: testEmoji.emojiId,
+        code: testEmoji.code,
+        deleted: true
+      });
+    });
+
+    it('should return 404 for non-existent emoji', async () => {
+      const response = await request
+        .get('/api/v1/emojis/99999')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('EMOJI_NOT_FOUND');
+    });
+
+    it('should return 401 without authentication', async () => {
+      const response = await request
+        .get(`/api/v1/emojis/${testEmoji.emojiId}`);
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('UNAUTHORIZED');
+    });
+  });
+
+  describe('DELETE /api/v1/emojis/{emojiId}', () => {
+    beforeEach(async () => {
+      const timestamp = new Date().getTime();
+      // Create a test emoji for deletion
+      const [emoji] = await db.insert(emojis)
+        .values({
+          code: `test_emoji_delete_${timestamp}`,
+          deleted: false,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      expect(emoji).toBeDefined();
+      expect(emoji.emojiId).toBeDefined();
+      testEmoji = emoji;
+    });
+
+    it('should soft delete an emoji', async () => {
+      const response = await request
+        .delete(`/api/v1/emojis/${testEmoji.emojiId}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(204);
+
+      // Verify emoji is soft deleted in database
+      const emoji = await db.query.emojis.findFirst({
+        where: eq(emojis.emojiId, testEmoji.emojiId)
+      });
+      expect(emoji).toBeDefined();
+      expect(emoji?.deleted).toBe(true);
+      expect(emoji?.updatedAt).not.toEqual(testEmoji.updatedAt);
+    });
+
+    it('should return 404 for non-existent emoji', async () => {
+      const response = await request
+        .delete('/api/v1/emojis/99999')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('EMOJI_NOT_FOUND');
+    });
+
+    it('should return 401 without authentication', async () => {
+      const response = await request
+        .delete(`/api/v1/emojis/${testEmoji.emojiId}`);
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('UNAUTHORIZED');
+    });
+  });
+
   afterEach(async () => {
     try {
       // Clean up test data
-      if (testEmoji?.emojiId) {
-        await db.delete(emojis)
-          .where(eq(emojis.emojiId, testEmoji.emojiId));
-      }
+      await db.delete(emojis);
 
       if (testUser?.userId) {
         await db.delete(users)

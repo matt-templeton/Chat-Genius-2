@@ -113,8 +113,6 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
  *       - Emojis
  *     summary: Create a new custom emoji
  *     description: Create a new custom emoji with the provided code
- *     security:
- *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -160,12 +158,14 @@ router.post('/', isAuthenticated, async (req: Request, res: Response) => {
     }
 
     // Create new emoji
-    const [emoji] = await db.insert(emojis).values({
-      code,
-      deleted: false,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }).returning();
+    const [emoji] = await db.insert(emojis)
+      .values({
+        code,
+        deleted: false,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
 
     res.status(201).json(emoji);
   } catch (error) {
@@ -198,7 +198,7 @@ router.post('/', isAuthenticated, async (req: Request, res: Response) => {
  *     tags:
  *       - Emojis
  *     summary: Get a specific emoji
- *     description: Retrieve details of a specific emoji by ID
+ *     description: Retrieve details of a specific emoji by ID (including soft-deleted if found)
  *     parameters:
  *       - in: path
  *         name: emojiId
@@ -255,8 +255,6 @@ router.get('/:emojiId', isAuthenticated, async (req: Request, res: Response) => 
  *       - Emojis
  *     summary: Soft delete an emoji
  *     description: Mark an emoji as deleted (soft delete)
- *     security:
- *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: emojiId

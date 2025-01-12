@@ -1118,7 +1118,7 @@
             }
           }
         },
-        ""delete": {
+        "delete": {
           "tags": ["Pinning"],
           "summary": "Unpin a message",
           "parameters": [
@@ -1319,104 +1319,55 @@
       "/emojis": {
         "get": {
           "tags": ["Emojis"],
-          "summary": "List all custom emojis",
-          "description": "Retrieve a paginated list of all custom emojis (excluding soft-deleted ones)",
+          "summary": "List all emojis (by default excludes deleted unless specified)",
           "parameters": [
             {
-              "name": "page",
+              "name": "includeDeleted",
               "in": "query",
-              "schema": {
-                "type": "integer",
-                "minimum": 1,
-                "default": 1
-              },
-              "description": "Page number"
-            },
-            {
-              "name": "limit",
-              "in": "query",
-              "schema": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 100,
-                "default": 20
-              },
-              "description": "Number of items per page"
+              "schema": { "type": "boolean", "default": false }
             }
           ],
           "responses": {
             "200": {
-              "description": "List of emojis",
+              "description": "Array of emojis",
               "content": {
                 "application/json": {
                   "schema": {
-                    "type": "object",
-                    "properties": {
-                      "data": {
-                        "type": "array",
-                        "items": {
-                          "$ref": "#/components/schemas/Emoji"
-                        }
-                      },
-                      "pagination": {
-                        "type": "object",
-                        "properties": {
-                          "currentPage": { "type": "integer" },
-                          "totalPages": { "type": "integer" },
-                          "totalItems": { "type": "integer" },
-                          "itemsPerPage": { "type": "integer" }
-                        }
-                      }
-                    }
+                    "type": "array",
+                    "items": { "$ref": "#/components/schemas/Emoji" }
                   }
                 }
               }
-            },
-            "401": { "description": "Unauthorized" }
+            }
           }
         },
         "post": {
           "tags": ["Emojis"],
-          "summary": "Create a new custom emoji",
+          "summary": "Add a new custom emoji",
           "requestBody": {
             "required": true,
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": ["code"],
-                  "properties": {
-                    "code": {
-                      "type": "string",
-                      "minLength": 1,
-                      "maxLength": 50
-                    }
-                  }
-                }
+                "schema": { "$ref": "#/components/schemas/EmojiCreateRequest" }
               }
             }
           },
           "responses": {
             "201": {
-              "description": "Emoji created successfully",
+              "description": "Emoji created",
               "content": {
                 "application/json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/Emoji"
-                  }
+                  "schema": { "$ref": "#/components/schemas/Emoji" }
                 }
               }
-            },
-            "400": { "description": "Invalid request body" },
-            "401": { "description": "Unauthorized" },
-            "409": { "description": "Emoji code already exists" }
+            }
           }
         }
       },
       "/emojis/{emojiId}": {
         "get": {
           "tags": ["Emojis"],
-          "summary": "Get a specific emoji",
+          "summary": "Get specific emoji details",
           "parameters": [
             {
               "name": "emojiId",
@@ -1430,19 +1381,24 @@
               "description": "Emoji details",
               "content": {
                 "application/json": {
-                  "schema": {
-                    "$ref": "#/components/schemas/Emoji"
+                  "schema": { "$ref": "#/components/schemas/Emoji" }
+                }
+              },
+              "404": {
+                "description": "EMOJI_NOT_FOUND",
+                "content": {
+                  "application/json": {
+                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
                   }
                 }
               }
-            },
-            "401": { "description": "Unauthorized" },
-            "404": { "description": "Emoji not found" }
+            }
           }
         },
         "delete": {
           "tags": ["Emojis"],
-          "summary": "Soft delete an emoji",
+          "summary": "Soft-delete an emoji",
+          "description": "Sets deleted=true instead of physical removal.",
           "parameters": [
             {
               "name": "emojiId",
@@ -1452,9 +1408,15 @@
             }
           ],
           "responses": {
-            "204": { "description": "Emoji successfully deleted" },
-            "401": { "description": "Unauthorized" },
-            "404": { "description": "Emoji not found" }
+            "204": { "description": "Emoji soft-deleted" },
+            "404": {
+              "description": "EMOJI_NOT_FOUND",
+              "content": {
+                "application/json": {
+                  "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                }
+              }
+            }
           }
         }
       },
@@ -1721,4 +1683,4 @@
       }
     }
   }
-}
+  
