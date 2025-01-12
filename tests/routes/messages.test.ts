@@ -160,6 +160,19 @@ describe('Message Endpoints', () => {
       expect(parseInt(response.body.parentMessageId.toString())).toBe(parseInt(parentResponse.body.messageId.toString()));
     });
 
+    it('should validate message content', async () => {
+      const response = await request
+        .post(`/api/v1/channels/${testChannel.channelId}/messages`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          content: ''  // Empty content should be invalid
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('INVALID_CONTENT');
+    });
+
     it('should return 404 for non-existent channel', async () => {
       const response = await request
         .post('/api/v1/channels/99999/messages')
@@ -221,6 +234,45 @@ describe('Message Endpoints', () => {
       expect(response.body.length).toBe(3);
     });
 
+    it('should respect offset parameter for pagination', async () => {
+      const response = await request
+        .get(`/api/v1/channels/${testChannel.channelId}/messages`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .query({ limit: 2, offset: 2 });
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBe(2);
+    });
+
+    it('should filter messages by before timestamp', async () => {
+      const cutoffDate = new Date();
+      // Wait a bit to ensure timestamps are different
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Add a newer message
+      await db.insert(messages)
+        .values({
+          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
+          channelId: parseInt(testChannel.channelId.toString()),
+          userId: parseInt(testUser.userId.toString()),
+          content: 'Newer message',
+          deleted: false,
+          postedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+
+      const response = await request
+        .get(`/api/v1/channels/${testChannel.channelId}/messages`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .query({ before: cutoffDate.toISOString() });
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.every((msg: any) => new Date(msg.postedAt) < cutoffDate)).toBe(true);
+    });
+
     it('should exclude deleted messages by default', async () => {
       await db.update(messages)
         .set({ deleted: true })
@@ -250,6 +302,301 @@ describe('Message Endpoints', () => {
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.some((msg: any) => msg.deleted)).toBe(true);
+    });
+  });
+
+  describe('GET /api/v1/messages/:messageId', () => {
+    let testMessage: any;
+
+    beforeEach(async () => {
+      // Create a test message to retrieve
+      const [message] = await db.insert(messages)
+        .values({
+          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
+          channelId: parseInt(testChannel.channelId.toString()),
+          userId: parseInt(testUser.userId.toString()),
+          content: 'Test message for retrieval',
+          deleted: false,
+          postedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      testMessage = message;
+    });
+
+    it('should retrieve a specific message by ID', async () => {
+      const response = await request
+        .get(`/api/v1/messages/${testMessage.messageId}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('messageId', testMessage.messageId);
+      expect(response.body).toHaveProperty('content', 'Test message for retrieval');
+      expect(parseInt(response.body.userId.toString())).toBe(parseInt(testUser.userId.toString()));
+      expect(parseInt(response.body.channelId.toString())).toBe(parseInt(testChannel.channelId.toString()));
+      expect(parseInt(response.body.workspaceId.toString())).toBe(parseInt(testWorkspace.workspaceId.toString()));
+    });
+
+    it('should return 404 for non-existent message', async () => {
+      const response = await request
+        .get('/api/v1/messages/99999')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('MESSAGE_NOT_FOUND');
+    });
+
+    it('should return 401 without authentication', async () => {
+      const response = await request
+        .get(`/api/v1/messages/${testMessage.messageId}`);
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('UNAUTHORIZED');
+    });
+
+    it('should retrieve a soft-deleted message', async () => {
+      // First soft-delete the message
+      await db.update(messages)
+        .set({ deleted: true })
+        .where(eq(messages.messageId, testMessage.messageId))
+        .execute();
+
+      const response = await request
+        .get(`/api/v1/messages/${testMessage.messageId}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('messageId', testMessage.messageId);
+      expect(response.body).toHaveProperty('deleted', true);
+    });
+  });
+
+  describe('PUT /api/v1/messages/:messageId', () => {
+    let testMessage: any;
+
+    beforeEach(async () => {
+      // Create a test message to update
+      const [message] = await db.insert(messages)
+        .values({
+          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
+          channelId: parseInt(testChannel.channelId.toString()),
+          userId: parseInt(testUser.userId.toString()),
+          content: 'Original message content',
+          deleted: false,
+          postedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      testMessage = message;
+    });
+
+    it('should update a message\'s content', async () => {
+      const response = await request
+        .put(`/api/v1/messages/${testMessage.messageId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          content: 'Updated message content'
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveProperty('messageId', testMessage.messageId);
+      expect(response.body).toHaveProperty('content', 'Updated message content');
+      expect(parseInt(response.body.userId.toString())).toBe(parseInt(testUser.userId.toString()));
+      expect(response.body).toHaveProperty('updatedAt');
+      expect(new Date(response.body.updatedAt)).toBeInstanceOf(Date);
+    });
+
+    it('should not allow updating of other user\'s messages', async () => {
+      // Create another user
+      const timestamp = new Date().getTime();
+      const passwordHash = await bcrypt.hash(testPassword, 10);
+      const [otherUser] = await db.insert(users)
+        .values({
+          email: `other.user.${timestamp}@example.com`,
+          passwordHash,
+          displayName: 'Other Test User',
+          emailVerified: true,
+          deactivated: false,
+          lastKnownPresence: 'ONLINE',
+          lastLogin: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      // Create a message by the other user
+      const [otherMessage] = await db.insert(messages)
+        .values({
+          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
+          channelId: parseInt(testChannel.channelId.toString()),
+          userId: parseInt(otherUser.userId.toString()),
+          content: 'Other user\'s message',
+          deleted: false,
+          postedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      const response = await request
+        .put(`/api/v1/messages/${otherMessage.messageId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          content: 'Trying to update other\'s message'
+        });
+
+      expect(response.status).toBe(403);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('FORBIDDEN');
+    });
+
+    it('should return 404 for non-existent message', async () => {
+      const response = await request
+        .put('/api/v1/messages/99999')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          content: 'Updated content'
+        });
+
+      expect(response.status).toBe(404);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('MESSAGE_NOT_FOUND');
+    });
+
+    it('should validate message content', async () => {
+      const response = await request
+        .put(`/api/v1/messages/${testMessage.messageId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          content: ''  // Empty content should be invalid
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('INVALID_CONTENT');
+    });
+
+    it('should not allow updating a deleted message', async () => {
+      // First soft-delete the message
+      await db.update(messages)
+        .set({ deleted: true })
+        .where(eq(messages.messageId, testMessage.messageId))
+        .execute();
+
+      const response = await request
+        .put(`/api/v1/messages/${testMessage.messageId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          content: 'Trying to update deleted message'
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('MESSAGE_DELETED');
+    });
+  });
+
+  describe('DELETE /api/v1/messages/:messageId', () => {
+    let testMessage: any;
+
+    beforeEach(async () => {
+      // Create a test message to delete
+      const [message] = await db.insert(messages)
+        .values({
+          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
+          channelId: parseInt(testChannel.channelId.toString()),
+          userId: parseInt(testUser.userId.toString()),
+          content: 'Message to be deleted',
+          deleted: false,
+          postedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      testMessage = message;
+    });
+
+    it('should soft delete a message', async () => {
+      const response = await request
+        .delete(`/api/v1/messages/${testMessage.messageId}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(204);
+
+      // Verify the message is soft deleted
+      const deletedMessage = await db.query.messages.findFirst({
+        where: eq(messages.messageId, testMessage.messageId)
+      });
+
+      expect(deletedMessage).toBeDefined();
+      expect(deletedMessage!.deleted).toBe(true);
+    });
+
+    it('should not allow deleting other user\'s messages', async () => {
+      // Create another user
+      const timestamp = new Date().getTime();
+      const passwordHash = await bcrypt.hash(testPassword, 10);
+      const [otherUser] = await db.insert(users)
+        .values({
+          email: `other.user.${timestamp}@example.com`,
+          passwordHash,
+          displayName: 'Other Test User',
+          emailVerified: true,
+          deactivated: false,
+          lastKnownPresence: 'ONLINE',
+          lastLogin: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      // Create a message by the other user
+      const [otherMessage] = await db.insert(messages)
+        .values({
+          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
+          channelId: parseInt(testChannel.channelId.toString()),
+          userId: parseInt(otherUser.userId.toString()),
+          content: 'Other user\'s message',
+          deleted: false,
+          postedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      const response = await request
+        .delete(`/api/v1/messages/${otherMessage.messageId}`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(403);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('FORBIDDEN');
+    });
+
+    it('should return 404 for non-existent message', async () => {
+      const response = await request
+        .delete('/api/v1/messages/99999')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('MESSAGE_NOT_FOUND');
+    });
+
+    it('should return 401 without authentication', async () => {
+      const response = await request
+        .delete(`/api/v1/messages/${testMessage.messageId}`);
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('UNAUTHORIZED');
     });
   });
 
