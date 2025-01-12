@@ -21,12 +21,78 @@ const storage = multer.diskStorage({
   },
 });
 
+// File filter to validate file types
+const fileFilter = (req: any, file: any, cb: any) => {
+  // List of allowed MIME types
+  const allowedTypes = [
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+    'application/zip',
+  ];
+
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Invalid file type'), false);
+  }
+};
+
 const upload = multer({
   storage,
   limits: {
     fileSize: 50 * 1024 * 1024, // 50MB limit
   },
+  fileFilter,
 });
+
+// Custom error handler for multer
+const handleFileUpload = (req: Request, res: Response, next: Function) => {
+  upload.single("file")(req, res, (err: any) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({
+          error: "File Too Large",
+          details: {
+            code: "FILE_TOO_LARGE",
+            message: "File size exceeds the 50MB limit",
+          },
+        });
+      }
+      return res.status(400).json({
+        error: "File Upload Error",
+        details: {
+          code: "FILE_UPLOAD_ERROR",
+          message: err.message,
+        },
+      });
+    }
+    if (err) {
+      // Handle file type validation error
+      if (err.message === 'Invalid file type') {
+        return res.status(400).json({
+          error: "Invalid File Type",
+          details: {
+            code: "INVALID_FILE_TYPE",
+            message: "The uploaded file type is not supported",
+          },
+        });
+      }
+      return res.status(500).json({
+        error: "Internal Server Error",
+        details: {
+          code: "SERVER_ERROR",
+          message: "Failed to upload file",
+        },
+      });
+    }
+    next();
+  });
+};
 
 /**
  * Verify workspace access
@@ -62,7 +128,7 @@ async function verifyWorkspaceAccess(
 router.post(
   "/",
   isAuthenticated,
-  upload.single("file"),
+  handleFileUpload,
   async (req: Request, res: Response) => {
     try {
       const file = req.file;
@@ -185,6 +251,5 @@ router.get("/:fileId", isAuthenticated, async (req: Request, res: Response) => {
     });
   }
 });
-
 
 export { router as fileRouter };

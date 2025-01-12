@@ -101,10 +101,7 @@ describe("File Upload and Management Endpoints", () => {
       expect(response.body).toHaveProperty("fileId");
       expect(response.body).toHaveProperty("filename");
       expect(response.body).toHaveProperty("fileUrl");
-      expect(response.body).toHaveProperty(
-        "workspaceId",
-        testWorkspace.workspaceId,
-      );
+      expect(response.body).toHaveProperty("workspaceId", testWorkspace.workspaceId);
 
       testFile = response.body;
       // Clean up test file
@@ -124,6 +121,53 @@ describe("File Upload and Management Endpoints", () => {
 
       expect(response.status).toBe(201);
       expect(response.body).toHaveProperty("messageId", testMessage.messageId);
+
+      // Clean up test file
+      await fs.unlink(testFilePath);
+    });
+
+    it("should handle duplicate file uploads in the same workspace", async () => {
+      const testFilePath = path.join(__dirname, "test-file.txt");
+      await fs.writeFile(testFilePath, "Test file content");
+
+      // First upload
+      const firstResponse = await request
+        .post("/api/v1/files")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .field("workspaceId", testWorkspace.workspaceId.toString())
+        .attach("file", testFilePath);
+
+      expect(firstResponse.status).toBe(201);
+      const firstFileId = firstResponse.body.fileId;
+
+      // Second upload of the same file
+      const secondResponse = await request
+        .post("/api/v1/files")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .field("workspaceId", testWorkspace.workspaceId.toString())
+        .attach("file", testFilePath);
+
+      expect(secondResponse.status).toBe(200); // Returns existing file
+      expect(secondResponse.body.fileId).toBe(firstFileId);
+
+      // Clean up test file
+      await fs.unlink(testFilePath);
+    });
+
+    it("should return 400 when file size exceeds limit", async () => {
+      // Create a temporary large file (51MB)
+      const testFilePath = path.join(__dirname, "large-test-file.txt");
+      const largeContent = Buffer.alloc(51 * 1024 * 1024, 'x');
+      await fs.writeFile(testFilePath, largeContent);
+
+      const response = await request
+        .post("/api/v1/files")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .field("workspaceId", testWorkspace.workspaceId.toString())
+        .attach("file", testFilePath);
+
+      expect(response.status).toBe(400);
+      expect(response.body.details.code).toBe("FILE_TOO_LARGE");
 
       // Clean up test file
       await fs.unlink(testFilePath);
@@ -156,6 +200,41 @@ describe("File Upload and Management Endpoints", () => {
       // Clean up test file
       await fs.unlink(testFilePath);
     });
+
+    it("should return 404 when workspace does not exist", async () => {
+      const testFilePath = path.join(__dirname, "test-file.txt");
+      await fs.writeFile(testFilePath, "Test file content");
+
+      const response = await request
+        .post("/api/v1/files")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .field("workspaceId", "99999")
+        .attach("file", testFilePath);
+
+      expect(response.status).toBe(404);
+      expect(response.body.details.code).toBe("WORKSPACE_NOT_FOUND");
+
+      // Clean up test file
+      await fs.unlink(testFilePath);
+    });
+
+    it("should return 400 for invalid file type", async () => {
+      // Create a test file with .exe extension
+      const testFilePath = path.join(__dirname, "test-file.exe");
+      await fs.writeFile(testFilePath, "Mock executable content");
+
+      const response = await request
+        .post("/api/v1/files")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .field("workspaceId", testWorkspace.workspaceId.toString())
+        .attach("file", testFilePath);
+
+      expect(response.status).toBe(400);
+      expect(response.body.details.code).toBe("INVALID_FILE_TYPE");
+
+      // Clean up test file
+      await fs.unlink(testFilePath);
+    });
   });
 
   describe("GET /api/v1/files/:fileId", () => {
@@ -182,10 +261,7 @@ describe("File Upload and Management Endpoints", () => {
       expect(response.status).toBe(200);
       expect(response.body).toHaveProperty("fileId", testFile.fileId);
       expect(response.body).toHaveProperty("filename", testFile.filename);
-      expect(response.body).toHaveProperty(
-        "workspaceId",
-        testWorkspace.workspaceId,
-      );
+      expect(response.body).toHaveProperty("workspaceId", testWorkspace.workspaceId);
     });
 
     it("should return 404 for non-existent file", async () => {
@@ -197,23 +273,42 @@ describe("File Upload and Management Endpoints", () => {
       expect(response.body).toHaveProperty("error");
       expect(response.body.details.code).toBe("FILE_NOT_FOUND");
     });
-  });
 
-  describe("GET /api/v1/messages/:messageId/files", () => {
-    beforeEach(async () => {
-      // Upload a test file and attach it to the test message
-      const testFilePath = path.join(__dirname, "test-file.txt");
-      await fs.writeFile(testFilePath, "Test file content");
+    it("should return 401 without authentication", async () => {
+      const response = await request
+        .get(`/api/v1/files/${testFile.fileId}`);
 
-      const uploadResponse = await request
-        .post("/api/v1/files")
-        .set("Authorization", `Bearer ${accessToken}`)
-        .field("workspaceId", testWorkspace.workspaceId.toString())
-        .field("messageId", testMessage.messageId.toString())
-        .attach("file", testFilePath);
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty("error");
+      expect(response.body.details.code).toBe("UNAUTHORIZED");
+    });
+    it("should return 404 for file without workspace association", async () => {
+      // Create a test file record without workspace association
+      const [fileWithoutWorkspace] = await db
+        .insert(files)
+        .values({
+          userId: testUser.userId,
+          filename: "test-file.txt",
+          fileType: "text/plain",
+          fileUrl: "/uploads/test-file.txt",
+          fileSize: 100,
+          fileHash: "test-hash",
+          uploadTime: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
 
-      testFile = uploadResponse.body;
-      await fs.unlink(testFilePath);
+      const response = await request
+        .get(`/api/v1/files/${fileWithoutWorkspace.fileId}`)
+        .set("Authorization", `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body).toHaveProperty("error");
+      expect(response.body.details.code).toBe("INVALID_FILE");
+
+      // Clean up test file record
+      await db.delete(files).where(eq(files.fileId, fileWithoutWorkspace.fileId));
     });
   });
 
