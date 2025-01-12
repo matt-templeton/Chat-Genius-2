@@ -1,6 +1,6 @@
 import { 
   pgTable, 
-  serial, 
+  serial,
   varchar, 
   text, 
   boolean, 

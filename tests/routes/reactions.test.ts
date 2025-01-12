@@ -218,16 +218,12 @@ describe('Reaction Endpoints', () => {
   describe('DELETE /api/v1/messages/:messageId/reactions/:emojiId', () => {
     beforeEach(async () => {
       // Add a reaction to delete
-      await db.insert(messageReactions)
-        .values({
-          messageId: parseInt(testMessage.messageId.toString()),
-          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
-          emojiId: parseInt(testEmoji.emojiId.toString()),
-          userId: parseInt(testUser.userId.toString()),
-          createdAt: new Date(),
-          updatedAt: new Date()
-        })
-        .returning();
+      await request
+        .post(`/api/v1/messages/${testMessage.messageId}/reactions`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          emojiId: testEmoji.emojiId
+        });
     });
 
     it('should remove a reaction from a message', async () => {
@@ -251,16 +247,12 @@ describe('Reaction Endpoints', () => {
   describe('GET /api/v1/messages/:messageId/reactions', () => {
     beforeEach(async () => {
       // Add some reactions to list
-      await db.insert(messageReactions)
-        .values({
-          messageId: parseInt(testMessage.messageId.toString()),
-          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
-          emojiId: parseInt(testEmoji.emojiId.toString()),
-          userId: parseInt(testUser.userId.toString()),
-          createdAt: new Date(),
-          updatedAt: new Date()
-        })
-        .returning();
+      await request
+        .post(`/api/v1/messages/${testMessage.messageId}/reactions`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          emojiId: testEmoji.emojiId
+        });
     });
 
     it('should list all reactions for a message', async () => {

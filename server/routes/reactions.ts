@@ -49,17 +49,37 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
       });
     }
 
+    // Check for existing reaction
+    const existingReaction = await db.query.messageReactions.findFirst({
+      where: and(
+        eq(messageReactions.messageId, parseInt(messageId)),
+        eq(messageReactions.workspaceId, message.workspaceId),
+        eq(messageReactions.emojiId, emojiId),
+        eq(messageReactions.userId, req.user!.userId)
+      )
+    });
+
+    if (existingReaction) {
+      return res.status(409).json({
+        error: "Duplicate Reaction",
+        details: {
+          code: "DUPLICATE_REACTION",
+          message: "User has already reacted with this emoji"
+        }
+      });
+    }
+
     // Add the reaction
-    await db.insert(messageReactions).values({
+    const [reaction] = await db.insert(messageReactions).values({
       messageId: parseInt(messageId),
       workspaceId: message.workspaceId,
       emojiId,
       userId: req.user!.userId,
       createdAt: new Date(),
       updatedAt: new Date()
-    });
+    }).returning();
 
-    res.status(201).send();
+    res.status(201).json(reaction);
   } catch (error) {
     // Check if error is a unique constraint violation
     if (error instanceof Error && error.message.includes('idx_reactions_unique')) {
