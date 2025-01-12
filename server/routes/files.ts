@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from "@db";
-import { files, messages } from "@db/schema";
+import { files, messages, workspaces } from "@db/schema";
 import { eq, and } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
@@ -29,6 +29,29 @@ const upload = multer({
 });
 
 /**
+ * Verify workspace access
+ */
+async function verifyWorkspaceAccess(req: Request, res: Response, workspaceId: number) {
+  const workspace = await db.query.workspaces.findFirst({
+    where: eq(workspaces.workspaceId, workspaceId)
+  });
+
+  if (!workspace) {
+    res.status(404).json({
+      error: "Workspace Not Found",
+      details: {
+        code: "WORKSPACE_NOT_FOUND",
+        message: "The specified workspace does not exist"
+      }
+    });
+    return false;
+  }
+
+  // TODO: Add workspace member verification once workspace members table is set up
+  return true;
+}
+
+/**
  * @route POST /files
  * @desc Upload a file, optionally attaching it to a message
  */
@@ -45,6 +68,11 @@ router.post('/', isAuthenticated, upload.single('file'), async (req: Request, re
           message: "No file was uploaded"
         }
       });
+    }
+
+    // Verify workspace access
+    if (!(await verifyWorkspaceAccess(req, res, parseInt(workspaceId)))) {
+      return;
     }
 
     // Generate file hash for deduplication
@@ -115,6 +143,11 @@ router.get('/:fileId', isAuthenticated, async (req: Request, res: Response) => {
       });
     }
 
+    // Verify workspace access
+    if (!(await verifyWorkspaceAccess(req, res, file.workspaceId))) {
+      return;
+    }
+
     res.json(file);
   } catch (error) {
     console.error('Error fetching file:', error);
@@ -149,6 +182,11 @@ router.get('/message/:messageId', isAuthenticated, async (req: Request, res: Res
           message: "The specified message does not exist"
         }
       });
+    }
+
+    // Verify workspace access
+    if (!(await verifyWorkspaceAccess(req, res, message.workspaceId))) {
+      return;
     }
 
     const attachedFiles = await db.query.files.findMany({

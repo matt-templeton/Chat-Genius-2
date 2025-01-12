@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from "@db";
 import { messages, channels } from "@db/schema";
-import { eq, and, desc, lt, sql } from "drizzle-orm";
+import { eq, and, desc, lt } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
 
@@ -9,7 +9,7 @@ const router = Router();
 
 /**
  * @route GET /channels/:channelId/messages
- * @desc List messages in a channel with pagination
+ * @desc List messages in a channel with pagination (excluded deleted unless requested)
  */
 router.get('/:channelId/messages', isAuthenticated, async (req: Request, res: Response) => {
   try {
@@ -140,7 +140,7 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
 
 /**
  * @route GET /messages/:messageId
- * @desc Get message details
+ * @desc Get message details (including soft-deleted if found)
  */
 router.get('/:messageId', isAuthenticated, async (req: Request, res: Response) => {
   try {
@@ -175,14 +175,14 @@ router.get('/:messageId', isAuthenticated, async (req: Request, res: Response) =
 
 /**
  * @route PUT /messages/:messageId
- * @desc Update message content
+ * @desc Update a message's content
  */
 router.put('/:messageId', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { messageId } = req.params;
     const { content } = req.body;
 
-    // First get the message to get its workspaceId
+    // First get the message to verify ownership and get workspaceId
     const existingMessage = await db.query.messages.findFirst({
       where: eq(messages.messageId, parseInt(messageId))
     });
@@ -193,6 +193,17 @@ router.put('/:messageId', isAuthenticated, async (req: Request, res: Response) =
         details: {
           code: "MESSAGE_NOT_FOUND",
           message: "The requested message does not exist"
+        }
+      });
+    }
+
+    // Verify user owns the message or has appropriate permissions
+    if (existingMessage.userId !== req.user!.userId) {
+      return res.status(403).json({
+        error: "Forbidden",
+        details: {
+          code: "NOT_MESSAGE_OWNER",
+          message: "You don't have permission to edit this message"
         }
       });
     }
@@ -229,7 +240,7 @@ router.delete('/:messageId', isAuthenticated, async (req: Request, res: Response
   try {
     const { messageId } = req.params;
 
-    // First get the message to get its workspaceId
+    // First get the message to verify ownership and get workspaceId
     const existingMessage = await db.query.messages.findFirst({
       where: eq(messages.messageId, parseInt(messageId))
     });
@@ -240,6 +251,17 @@ router.delete('/:messageId', isAuthenticated, async (req: Request, res: Response
         details: {
           code: "MESSAGE_NOT_FOUND",
           message: "The requested message does not exist"
+        }
+      });
+    }
+
+    // Verify user owns the message or has appropriate permissions
+    if (existingMessage.userId !== req.user!.userId) {
+      return res.status(403).json({
+        error: "Forbidden",
+        details: {
+          code: "NOT_MESSAGE_OWNER",
+          message: "You don't have permission to delete this message"
         }
       });
     }
