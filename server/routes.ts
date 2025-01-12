@@ -55,12 +55,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(`${apiPrefix}/auth`, authRouter);
   app.use(`${apiPrefix}/users`, userRouter);
   app.use(`${apiPrefix}/workspaces`, workspaceRouter);
-  app.use(`${apiPrefix}/channels`, channelRouter);
+  app.use(`${apiPrefix}/workspaces`, channelRouter); // Mount workspace-related channel routes
+  app.use(`${apiPrefix}/channels`, channelRouter); // Mount channel-specific routes
 
   // Mount message-related routes
-  // Some message endpoints are under /channels/:channelId/messages
   app.use(`${apiPrefix}/channels`, messageRouter);
-  // Other message endpoints like GET /messages/:messageId are under /messages
   app.use(`${apiPrefix}/messages`, messageRouter);
 
   // Mount reactions and pins under /messages since they're message-related

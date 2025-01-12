@@ -1,47 +1,53 @@
 import { Router } from 'express';
 import { db } from "@db";
-import { channels, userChannels } from "@db/schema";
+import { channels, userChannels, workspaces, users } from "@db/schema";
 import { eq, and } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
+import { z } from 'zod';
 
 const router = Router();
 
-/**
- * @route GET /channels
- * @desc List all channels (admin only)
- */
-router.get('/', isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    const { includeArchived = false } = req.query;
-    const query = includeArchived ? 
-      db.query.channels.findMany() :
-      db.query.channels.findMany({
-        where: eq(channels.archived, false)
-      });
+// Input validation schemas
+const createChannelSchema = z.object({
+  name: z.string().min(1, "Channel name is required"),
+  workspaceId: z.number().int().positive("Valid workspace ID is required"),
+  topic: z.string().optional(),
+  channelType: z.enum(['PUBLIC', 'PRIVATE']).default('PUBLIC')
+});
 
-    const channelsList = await query;
-    res.json(channelsList);
-  } catch (error) {
-    console.error('Error fetching channels:', error);
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: {
-        code: "SERVER_ERROR",
-        message: "Failed to fetch channels"
-      }
-    });
-  }
+const updateChannelSchema = z.object({
+  name: z.string().min(1, "Channel name is required"),
+  topic: z.string().optional()
+});
+
+const addMemberSchema = z.object({
+  userId: z.number().int().positive("Valid user ID is required")
 });
 
 /**
- * @route GET /workspaces/:workspaceId/channels
+ * @route GET /api/v1/workspaces/{workspaceId}/channels
  * @desc List channels in a workspace
  */
-router.get('/workspace/:workspaceId', isAuthenticated, async (req: Request, res: Response) => {
+router.get('/:workspaceId/channels', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { workspaceId } = req.params;
     const { includeArchived = false } = req.query;
+
+    // Verify workspace exists first
+    const workspace = await db.query.workspaces.findFirst({
+      where: eq(workspaces.workspaceId, parseInt(workspaceId))
+    });
+
+    if (!workspace) {
+      return res.status(404).json({
+        error: "Workspace Not Found",
+        details: {
+          code: "WORKSPACE_NOT_FOUND",
+          message: "The requested workspace does not exist"
+        }
+      });
+    }
 
     const query = includeArchived ?
       db.query.channels.findMany({
@@ -69,12 +75,40 @@ router.get('/workspace/:workspaceId', isAuthenticated, async (req: Request, res:
 });
 
 /**
- * @route POST /channels
+ * @route POST /api/v1/channels
  * @desc Create a new channel
  */
 router.post('/', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { name, topic, workspaceId, channelType = 'PUBLIC' } = req.body;
+    // Validate input
+    const validationResult = createChannelSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid channel data",
+          errors: validationResult.error.errors
+        }
+      });
+    }
+
+    const { name, topic, workspaceId, channelType } = validationResult.data;
+
+    // Verify workspace exists
+    const workspace = await db.query.workspaces.findFirst({
+      where: eq(workspaces.workspaceId, workspaceId)
+    });
+
+    if (!workspace) {
+      return res.status(404).json({
+        error: "Workspace Not Found",
+        details: {
+          code: "WORKSPACE_NOT_FOUND",
+          message: "The specified workspace does not exist"
+        }
+      });
+    }
 
     const [channel] = await db.insert(channels).values({
       name,
@@ -108,7 +142,7 @@ router.post('/', isAuthenticated, async (req: Request, res: Response) => {
 });
 
 /**
- * @route GET /channels/:channelId
+ * @route GET /api/v1/channels/{channelId}
  * @desc Get channel details
  */
 router.get('/:channelId', isAuthenticated, async (req: Request, res: Response) => {
@@ -142,13 +176,27 @@ router.get('/:channelId', isAuthenticated, async (req: Request, res: Response) =
 });
 
 /**
- * @route PUT /channels/:channelId
+ * @route PUT /api/v1/channels/{channelId}
  * @desc Update channel details
  */
 router.put('/:channelId', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { channelId } = req.params;
-    const { name, topic } = req.body;
+
+    // Validate input
+    const validationResult = updateChannelSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid channel data",
+          errors: validationResult.error.errors
+        }
+      });
+    }
+
+    const { name, topic } = validationResult.data;
 
     const [channel] = await db.update(channels)
       .set({
@@ -183,7 +231,7 @@ router.put('/:channelId', isAuthenticated, async (req: Request, res: Response) =
 });
 
 /**
- * @route DELETE /channels/:channelId
+ * @route DELETE /api/v1/channels/{channelId}
  * @desc Archive (soft-delete) a channel
  */
 router.delete('/:channelId', isAuthenticated, async (req: Request, res: Response) => {
@@ -222,13 +270,57 @@ router.delete('/:channelId', isAuthenticated, async (req: Request, res: Response
 });
 
 /**
- * @route POST /channels/:channelId/members
+ * @route POST /api/v1/channels/{channelId}/members
  * @desc Add a member to the channel
  */
 router.post('/:channelId/members', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { channelId } = req.params;
-    const { userId } = req.body;
+
+    // Validate input
+    const validationResult = addMemberSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid member data",
+          errors: validationResult.error.errors
+        }
+      });
+    }
+
+    const { userId } = validationResult.data;
+
+    // Verify channel exists
+    const channel = await db.query.channels.findFirst({
+      where: eq(channels.channelId, parseInt(channelId))
+    });
+
+    if (!channel) {
+      return res.status(404).json({
+        error: "Channel Not Found",
+        details: {
+          code: "CHANNEL_NOT_FOUND",
+          message: "The requested channel does not exist"
+        }
+      });
+    }
+
+    // Verify user exists
+    const user = await db.query.users.findFirst({
+      where: eq(users.userId, userId)
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        error: "User Not Found",
+        details: {
+          code: "USER_NOT_FOUND",
+          message: "The specified user does not exist"
+        }
+      });
+    }
 
     await db.insert(userChannels).values({
       userId,
@@ -251,7 +343,7 @@ router.post('/:channelId/members', isAuthenticated, async (req: Request, res: Re
 });
 
 /**
- * @route DELETE /channels/:channelId/members
+ * @route DELETE /api/v1/channels/{channelId}/members
  * @desc Remove a member from the channel
  */
 router.delete('/:channelId/members', isAuthenticated, async (req: Request, res: Response) => {
@@ -269,6 +361,40 @@ router.delete('/:channelId/members', isAuthenticated, async (req: Request, res: 
       });
     }
 
+    // Verify channel exists
+    const channel = await db.query.channels.findFirst({
+      where: eq(channels.channelId, parseInt(channelId))
+    });
+
+    if (!channel) {
+      return res.status(404).json({
+        error: "Channel Not Found",
+        details: {
+          code: "CHANNEL_NOT_FOUND",
+          message: "The requested channel does not exist"
+        }
+      });
+    }
+
+    // Verify membership exists before attempting deletion
+    const membershipExists = await db.query.userChannels.findFirst({
+      where: and(
+        eq(userChannels.channelId, parseInt(channelId)),
+        eq(userChannels.userId, parseInt(userId as string))
+      )
+    });
+
+    if (!membershipExists) {
+      return res.status(404).json({
+        error: "Member Not Found",
+        details: {
+          code: "MEMBER_NOT_FOUND",
+          message: "The specified user is not a member of this channel"
+        }
+      });
+    }
+
+    // Delete the membership
     await db.delete(userChannels)
       .where(and(
         eq(userChannels.channelId, parseInt(channelId)),
