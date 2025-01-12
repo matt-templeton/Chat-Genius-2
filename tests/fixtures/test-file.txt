@@ -1,3 +1,0 @@
-This is a test file for upload testing purposes.
-It contains some sample text content.
-The file size is intentionally small for quick testing.
