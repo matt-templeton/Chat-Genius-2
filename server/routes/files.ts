@@ -143,6 +143,16 @@ router.get('/:fileId', isAuthenticated, async (req: Request, res: Response) => {
       });
     }
 
+    if (!file.workspaceId) {
+      return res.status(404).json({
+        error: "Invalid File",
+        details: {
+          code: "INVALID_FILE",
+          message: "File is not associated with any workspace"
+        }
+      });
+    }
+
     // Verify workspace access
     if (!(await verifyWorkspaceAccess(req, res, file.workspaceId))) {
       return;

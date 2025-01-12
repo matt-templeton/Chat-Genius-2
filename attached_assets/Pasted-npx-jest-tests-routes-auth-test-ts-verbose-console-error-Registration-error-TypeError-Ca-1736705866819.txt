@@ -1,0 +1,126 @@
+npx jest tests/routes/auth.test.ts --verbose
+  console.error
+    Registration error: TypeError: Cannot destructure property 'email' of 'req.body' as it is undefined.
+        at /home/runner/workspace/server/routes/auth.ts:31:13
+        at Generator.next (<anonymous>)
+        at /home/runner/workspace/server/routes/auth.ts:8:71
+        at new Promise (<anonymous>)
+        at Object.<anonymous>.__awaiter (/home/runner/workspace/server/routes/auth.ts:4:12)
+        at /home/runner/workspace/server/routes/auth.ts:29:64
+        at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+        at next (/home/runner/workspace/node_modules/express/lib/router/route.js:149:13)
+        at Route.dispatch (/home/runner/workspace/node_modules/express/lib/router/route.js:119:3)
+        at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+        at /home/runner/workspace/node_modules/express/lib/router/index.js:284:15
+        at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+        at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+        at Function.handle (/home/runner/workspace/node_modules/express/lib/router/index.js:175:3)
+        at router (/home/runner/workspace/node_modules/express/lib/router/index.js:47:12)
+        at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+        at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+        at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+        at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+        at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+        at SessionStrategy.strategy.pass (/home/runner/workspace/node_modules/passport/lib/middleware/authenticate.js:355:9)
+        at SessionStrategy.Object.<anonymous>.SessionStrategy.authenticate (/home/runner/workspace/node_modules/passport/lib/strategies/session.js:126:10)
+        at attempt (/home/runner/workspace/node_modules/passport/lib/middleware/authenticate.js:378:16)
+        at authenticate (/home/runner/workspace/node_modules/passport/lib/middleware/authenticate.js:379:7)
+        at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+        at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+        at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+        at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+        at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+        at initialize (/home/runner/workspace/node_modules/passport/lib/middleware/initialize.js:98:5)
+        at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+        at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+        at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+        at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+        at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+        at session (/home/runner/workspace/node_modules/express-session/index.js:487:7)
+        at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+        at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+        at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+        at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+        at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+        at expressInit (/home/runner/workspace/node_modules/express/lib/middleware/init.js:40:5)
+        at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+        at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+        at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+        at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+        at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+        at query (/home/runner/workspace/node_modules/express/lib/middleware/query.js:45:5)
+        at Layer.handle [as handle_request] (/home/runner/workspace/node_modules/express/lib/router/layer.js:95:5)
+        at trim_prefix (/home/runner/workspace/node_modules/express/lib/router/index.js:328:13)
+        at /home/runner/workspace/node_modules/express/lib/router/index.js:286:9
+        at Function.process_params (/home/runner/workspace/node_modules/express/lib/router/index.js:346:12)
+        at next (/home/runner/workspace/node_modules/express/lib/router/index.js:280:10)
+        at Function.handle (/home/runner/workspace/node_modules/express/lib/router/index.js:175:3)
+        at Function.handle (/home/runner/workspace/node_modules/express/lib/application.js:181:10)
+        at Server.app (/home/runner/workspace/node_modules/express/lib/express.js:39:9)
+        at Server.emit (node:events:518:28)
+        at Server.emit (node:domain:489:12)
+        at parserOnIncoming (node:_http_server:1141:12)
+        at HTTPParser.parserOnHeadersComplete (node:_http_common:118:17)
+
+      76 |     });
+      77 |   } catch (error) {
+    > 78 |     console.error('Registration error:', error);
+         |             ^
+      79 |     res.status(500).json({
+      80 |       error: "Internal Server Error",
+      81 |       details: {
+
+      at server/routes/auth.ts:78:13
+      at server/routes/auth.ts:8:71
+      at Object.<anonymous>.__awaiter (server/routes/auth.ts:4:12)
+      at server/routes/auth.ts:29:64
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at next (node_modules/express/lib/router/route.js:149:13)
+      at Route.dispatch (node_modules/express/lib/router/route.js:119:3)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at node_modules/express/lib/router/index.js:284:15
+      at Function.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at Function.handle (node_modules/express/lib/router/index.js:175:3)
+      at router (node_modules/express/lib/router/index.js:47:12)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at Function.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at SessionStrategy.strategy.pass (node_modules/passport/lib/middleware/authenticate.js:355:9)
+      at SessionStrategy.Object.<anonymous>.SessionStrategy.authenticate (node_modules/passport/lib/strategies/session.js:126:10)
+      at attempt (node_modules/passport/lib/middleware/authenticate.js:378:16)
+      at authenticate (node_modules/passport/lib/middleware/authenticate.js:379:7)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at Function.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at initialize (node_modules/passport/lib/middleware/initialize.js:98:5)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at Function.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at session (node_modules/express-session/index.js:487:7)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at Function.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at expressInit (node_modules/express/lib/middleware/init.js:40:5)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at Function.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at query (node_modules/express/lib/middleware/query.js:45:5)
+      at Layer.handle [as handle_request] (node_modules/express/lib/router/layer.js:95:5)
+      at trim_prefix (node_modules/express/lib/router/index.js:328:13)
+      at node_modules/express/lib/router/index.js:286:9
+      at Function.process_params (node_modules/express/lib/router/index.js:346:12)
+      at next (node_modules/express/lib/router/index.js:280:10)
+      at Function.handle (node_modules/express/lib/router/index.js:175:3)
+      at Function.handle (node_modules/express/lib/application.js:181:10)
+      at Server.app (node_modules/express/lib/express.js:39:9)
