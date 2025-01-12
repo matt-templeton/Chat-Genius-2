@@ -6,6 +6,7 @@ import { users } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 
 const app = express();
+app.use(express.json());
 const server = registerRoutes(app);
 const request = supertest(app);
 
