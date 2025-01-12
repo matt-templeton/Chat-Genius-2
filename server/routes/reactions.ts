@@ -72,8 +72,8 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
     // Add the reaction
     const [reaction] = await db.insert(messageReactions).values({
       messageId: parseInt(messageId),
-      workspaceId: message.workspaceId,
-      emojiId,
+      workspaceId: message.workspaceId!,
+      emojiId: parseInt(emojiId.toString()),
       userId: req.user!.userId,
       createdAt: new Date(),
       updatedAt: new Date()
