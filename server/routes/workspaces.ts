@@ -4,8 +4,20 @@ import { workspaces, userWorkspaces } from "@db/schema";
 import { eq, and } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
+import { z } from 'zod';
 
 const router = Router();
+
+// Input validation schemas
+const createWorkspaceSchema = z.object({
+  name: z.string().min(1, "Workspace name is required"),
+  description: z.string().optional(),
+});
+
+const updateWorkspaceSchema = z.object({
+  name: z.string().min(1, "Workspace name is required"),
+  description: z.string().optional(),
+});
 
 /**
  * @route GET /workspaces
@@ -33,7 +45,20 @@ router.get('/', isAuthenticated, async (_req: Request, res: Response) => {
  */
 router.post('/', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { name, description } = req.body;
+    // Validate input
+    const validationResult = createWorkspaceSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid workspace data",
+          errors: validationResult.error.errors
+        }
+      });
+    }
+
+    const { name, description } = validationResult.data;
 
     const [workspace] = await db.insert(workspaces).values({
       name,
@@ -106,7 +131,21 @@ router.get('/:workspaceId', isAuthenticated, async (req: Request, res: Response)
 router.put('/:workspaceId', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { workspaceId } = req.params;
-    const { name, description } = req.body;
+
+    // Validate input
+    const validationResult = updateWorkspaceSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid workspace data",
+          errors: validationResult.error.errors
+        }
+      });
+    }
+
+    const { name, description } = validationResult.data;
 
     const [workspace] = await db.update(workspaces)
       .set({
@@ -174,74 +213,6 @@ router.delete('/:workspaceId', isAuthenticated, async (req: Request, res: Respon
       details: {
         code: "SERVER_ERROR",
         message: "Failed to archive workspace"
-      }
-    });
-  }
-});
-
-/**
- * @route POST /workspaces/:workspaceId/members
- * @desc Add a member to a workspace
- */
-router.post('/:workspaceId/members', isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    const { workspaceId } = req.params;
-    const { userId, role = 'MEMBER' } = req.body;
-
-    await db.insert(userWorkspaces).values({
-      userId,
-      workspaceId: parseInt(workspaceId),
-      role,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
-
-    res.status(201).json({ message: "User added to workspace" });
-  } catch (error) {
-    console.error('Error adding workspace member:', error);
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: {
-        code: "SERVER_ERROR",
-        message: "Failed to add member to workspace"
-      }
-    });
-  }
-});
-
-/**
- * @route DELETE /workspaces/:workspaceId/members
- * @desc Remove a member from a workspace
- */
-router.delete('/:workspaceId/members', isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    const { workspaceId } = req.params;
-    const { userId } = req.query;
-
-    if (!userId) {
-      return res.status(400).json({
-        error: "Bad Request",
-        details: {
-          code: "MISSING_USER_ID",
-          message: "User ID is required"
-        }
-      });
-    }
-
-    await db.delete(userWorkspaces)
-      .where(and(
-        eq(userWorkspaces.workspaceId, parseInt(workspaceId)),
-        eq(userWorkspaces.userId, parseInt(userId as string))
-      ));
-
-    res.status(204).send();
-  } catch (error) {
-    console.error('Error removing workspace member:', error);
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: {
-        code: "SERVER_ERROR",
-        message: "Failed to remove member from workspace"
       }
     });
   }
