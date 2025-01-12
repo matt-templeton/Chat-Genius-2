@@ -50,14 +50,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(passport.session());
 
   // Mount all routes under /api/v1 prefix
-  app.use('/api/v1/auth', authRouter);
-  app.use('/api/v1/users', userRouter);
-  app.use('/api/v1/workspaces', workspaceRouter);
-  app.use('/api/v1/channels', channelRouter);
-  app.use('/api/v1/messages', messageRouter);
-  app.use('/api/v1/messages', reactionRouter); // Mount under /messages for reactions
-  app.use('/api/v1/messages', pinRouter); // Mount under /messages for pins
-  app.use('/api/v1/files', fileRouter);
+  const apiPrefix = '/api/v1';
+  app.use(`${apiPrefix}/auth`, authRouter);
+  app.use(`${apiPrefix}/users`, userRouter);
+  app.use(`${apiPrefix}/workspaces`, workspaceRouter);
+  app.use(`${apiPrefix}/channels`, channelRouter);
+
+  // Mount message-related routes
+  // Some message endpoints are under /channels/:channelId/messages
+  app.use(`${apiPrefix}/channels`, messageRouter);
+  // Other message endpoints like GET /messages/:messageId are under /messages
+  app.use(`${apiPrefix}/messages`, messageRouter);
+
+  // Mount reactions and pins under /messages since they're message-related
+  app.use(`${apiPrefix}/messages`, reactionRouter);
+  app.use(`${apiPrefix}/messages`, pinRouter);
+
+  app.use(`${apiPrefix}/files`, fileRouter);
 
   // Create HTTP server
   const httpServer = createServer(app);

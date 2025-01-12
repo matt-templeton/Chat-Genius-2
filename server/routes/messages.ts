@@ -11,7 +11,7 @@ const router = Router();
  * @route GET /channels/:channelId/messages
  * @desc List messages in a channel with pagination
  */
-router.get('/channel/:channelId', isAuthenticated, async (req: Request, res: Response) => {
+router.get('/:channelId/messages', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { channelId } = req.params;
     const { limit = '20', offset = '0', before, includeDeleted = false } = req.query;
@@ -68,7 +68,7 @@ router.get('/channel/:channelId', isAuthenticated, async (req: Request, res: Res
  * @route POST /channels/:channelId/messages
  * @desc Send a message in the channel
  */
-router.post('/channel/:channelId', isAuthenticated, async (req: Request, res: Response) => {
+router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { channelId } = req.params;
     const { content, parentMessageId } = req.body;
