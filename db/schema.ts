@@ -6,7 +6,7 @@ import {
   boolean, 
   timestamp, 
   pgEnum,
-  integer,
+  bigint,
   primaryKey,
   uniqueIndex,
   foreignKey,
@@ -22,7 +22,7 @@ export const channelTypeEnum = pgEnum('channel_type_enum', ['PUBLIC', 'PRIVATE',
 
 // Users table
 export const users = pgTable('Users', {
-  userId: bigserial('userId', { mode: "bigint" }).primaryKey(),
+  userId: bigserial('userId', { mode: 'number' }).primaryKey(),
   email: varchar('email', { length: 254 }).notNull().unique(),
   passwordHash: varchar('passwordHash', { length: 255 }),
   displayName: varchar('displayName', { length: 50 }).notNull(),
@@ -39,7 +39,7 @@ export const users = pgTable('Users', {
 
 // Workspaces table
 export const workspaces = pgTable('Workspaces', {
-  workspaceId: bigserial('workspaceId', { mode: "bigint" }).primaryKey(),
+  workspaceId: bigserial('workspaceId', { mode: 'number' }).primaryKey(),
   name: varchar('name', { length: 100 }).notNull(),
   description: text('description'),
   archived: boolean('archived').default(false),
@@ -49,23 +49,26 @@ export const workspaces = pgTable('Workspaces', {
 
 // Channels table
 export const channels = pgTable('Channels', {
-  channelId: bigserial('channelId', { mode: "bigint" }).primaryKey(),
-  workspaceId: integer('workspaceId').references(() => workspaces.workspaceId, { onDelete: 'set null' }),
+  channelId: bigserial('channelId', { mode: 'number' }).primaryKey(),
+  workspaceId: bigint('workspaceId', { mode: 'number' }).references(() => workspaces.workspaceId, { onDelete: 'set null' }),
   name: varchar('name', { length: 100 }).notNull(),
   topic: text('topic'),
   channelType: channelTypeEnum('channelType').notNull().default('PUBLIC'),
   archived: boolean('archived').default(false),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
-});
+}, (table) => ({
+  workspaceNameIdx: uniqueIndex('idx_channels_workspace_name').on(table.workspaceId, sql`lower(${table.name})`),
+  notArchivedIdx: index('idx_channels_not_archived').on(table.workspaceId, table.name).where(sql`${table.archived} = false`)
+}));
 
 // Messages table (partitioned by workspaceId)
 export const messages = pgTable('Messages', {
-  messageId: bigserial('messageId', { mode: "bigint" }),
-  userId: integer('userId').references(() => users.userId, { onDelete: 'set null' }),
-  channelId: integer('channelId').references(() => channels.channelId, { onDelete: 'set null' }),
-  workspaceId: integer('workspaceId').notNull().references(() => workspaces.workspaceId, { onDelete: 'cascade' }),
-  parentMessageId: integer('parentMessageId'),
+  messageId: bigserial('messageId', { mode: 'number' }),
+  userId: bigint('userId', { mode: 'number' }).references(() => users.userId, { onDelete: 'set null' }),
+  channelId: bigint('channelId', { mode: 'number' }).references(() => channels.channelId, { onDelete: 'set null' }),
+  workspaceId: bigint('workspaceId', { mode: 'number' }).notNull().references(() => workspaces.workspaceId, { onDelete: 'set null' }),
+  parentMessageId: bigint('parentMessageId', { mode: 'number' }),
   content: text('content').notNull(),
   deleted: boolean('deleted').default(false),
   postedAt: timestamp('postedAt').defaultNow(),
@@ -76,7 +79,7 @@ export const messages = pgTable('Messages', {
   channelIdx: index('idx_messages_channel_id').on(table.channelId),
   postedAtIdx: index('idx_messages_posted_at').on(table.postedAt),
   channelPostedIdx: index('idx_messages_channel_posted_at').on(table.channelId, table.postedAt),
-  parentIdx: index('idx_messages_parent_id').on(table.parentMessageId, table.workspaceId),
+  parentIdx: index('idx_messages_parent_id').on(table.parentMessageId),
   notDeletedIdx: index('idx_messages_not_deleted').on(table.channelId, table.postedAt).where(sql`${table.deleted} = false`),
   parentFk: foreignKey({
     columns: [table.parentMessageId, table.workspaceId],
@@ -86,14 +89,14 @@ export const messages = pgTable('Messages', {
 
 // Files table
 export const files = pgTable('Files', {
-  fileId: bigserial('fileId', { mode: "bigint" }).primaryKey(),
-  userId: integer('userId').references(() => users.userId, { onDelete: 'set null' }),
-  messageId: integer('messageId'),
-  workspaceId: integer('workspaceId'),
+  fileId: bigserial('fileId', { mode: 'number' }).primaryKey(),
+  userId: bigint('userId', { mode: 'number' }).references(() => users.userId, { onDelete: 'set null' }),
+  messageId: bigint('messageId', { mode: 'number' }),
+  workspaceId: bigint('workspaceId', { mode: 'number' }),
   filename: varchar('filename', { length: 255 }).notNull(),
   fileType: varchar('fileType', { length: 50 }),
   fileUrl: varchar('fileUrl', { length: 255 }),
-  fileSize: integer('fileSize'),
+  fileSize: bigint('fileSize', { mode: 'number' }),
   fileHash: varchar('fileHash', { length: 64 }),
   uploadTime: timestamp('uploadTime').defaultNow(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
@@ -107,20 +110,22 @@ export const files = pgTable('Files', {
 
 // Emojis table
 export const emojis = pgTable('Emojis', {
-  emojiId: bigserial('emojiId', { mode: "bigint" }).primaryKey(),
+  emojiId: bigserial('emojiId', { mode: 'number' }).primaryKey(),
   code: varchar('code', { length: 50 }).notNull().unique(),
   deleted: boolean('deleted').default(false),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
-});
+}, (table) => ({
+  notDeletedIdx: index('idx_emojis_not_deleted').on(table.code).where(sql`${table.deleted} = false`)
+}));
 
 // Message Reactions table
 export const messageReactions = pgTable('MessageReactions', {
-  reactionId: bigserial('reactionId', { mode: "bigint" }).primaryKey(),
-  messageId: integer('messageId'),
-  workspaceId: integer('workspaceId'),
-  emojiId: integer('emojiId').references(() => emojis.emojiId, { onDelete: 'set null' }).notNull(),
-  userId: integer('userId').references(() => users.userId, { onDelete: 'set null' }),
+  reactionId: bigserial('reactionId', { mode: 'number' }).primaryKey(),
+  messageId: bigint('messageId', { mode: 'number' }),
+  workspaceId: bigint('workspaceId', { mode: 'number' }),
+  emojiId: bigint('emojiId', { mode: 'number' }).references(() => emojis.emojiId, { onDelete: 'set null' }).notNull(),
+  userId: bigint('userId', { mode: 'number' }).references(() => users.userId, { onDelete: 'set null' }),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 }, (table) => ({
@@ -128,7 +133,7 @@ export const messageReactions = pgTable('MessageReactions', {
     columns: [table.messageId, table.workspaceId],
     foreignColumns: [messages.messageId, messages.workspaceId]
   }).onDelete('set null'),
-  uniqueReaction: uniqueIndex('idx_reactions_unique').on(
+  uniqueReaction: uniqueIndex('idx_reactions_unique_message_emoji_user').on(
     table.messageId,
     table.workspaceId,
     table.emojiId,
@@ -138,8 +143,8 @@ export const messageReactions = pgTable('MessageReactions', {
 
 // User Workspaces table
 export const userWorkspaces = pgTable('UserWorkspaces', {
-  userId: integer('userId').references(() => users.userId, { onDelete: 'set null' }),
-  workspaceId: integer('workspaceId').references(() => workspaces.workspaceId, { onDelete: 'set null' }),
+  userId: bigint('userId', { mode: 'number' }).references(() => users.userId, { onDelete: 'set null' }),
+  workspaceId: bigint('workspaceId', { mode: 'number' }).references(() => workspaces.workspaceId, { onDelete: 'set null' }),
   role: workspaceRoleEnum('role').default('MEMBER'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
@@ -150,8 +155,8 @@ export const userWorkspaces = pgTable('UserWorkspaces', {
 
 // User Channels table
 export const userChannels = pgTable('UserChannels', {
-  userId: integer('userId').references(() => users.userId, { onDelete: 'set null' }),
-  channelId: integer('channelId').references(() => channels.channelId, { onDelete: 'set null' }),
+  userId: bigint('userId', { mode: 'number' }).references(() => users.userId, { onDelete: 'set null' }),
+  channelId: bigint('channelId', { mode: 'number' }).references(() => channels.channelId, { onDelete: 'set null' }),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 }, (table) => ({
@@ -163,10 +168,10 @@ export const userChannels = pgTable('UserChannels', {
 
 // Pinned Messages table
 export const pinnedMessages = pgTable('PinnedMessages', {
-  pinnedId: bigserial('pinnedId', { mode: "bigint" }).primaryKey(),
-  messageId: integer('messageId'),
-  workspaceId: integer('workspaceId'),
-  pinnedBy: integer('pinnedBy').references(() => users.userId, { onDelete: 'set null' }),
+  pinnedId: bigserial('pinnedId', { mode: 'number' }).primaryKey(),
+  messageId: bigint('messageId', { mode: 'number' }),
+  workspaceId: bigint('workspaceId', { mode: 'number' }),
+  pinnedBy: bigint('pinnedBy', { mode: 'number' }).references(() => users.userId, { onDelete: 'set null' }),
   pinnedReason: text('pinnedReason'),
   pinnedAt: timestamp('pinnedAt').notNull().defaultNow(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),

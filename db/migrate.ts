@@ -59,6 +59,55 @@ async function convertToBigSerial() {
   }
 }
 
+// Function to setup message partitioning
+async function setupMessagePartitioning() {
+  try {
+    // First, we need to drop existing foreign key constraints that reference Messages
+    await db.execute(sql`
+      ALTER TABLE "MessageReactions" DROP CONSTRAINT IF EXISTS "MessageReactions_messageId_Messages_messageId_fk";
+      ALTER TABLE "PinnedMessages" DROP CONSTRAINT IF EXISTS "PinnedMessages_messageId_Messages_messageId_fk";
+      ALTER TABLE "Files" DROP CONSTRAINT IF EXISTS "Files_messageId_Messages_messageId_fk";
+    `);
+
+    // Drop the Messages table if it exists and recreate it with partitioning
+    await db.execute(sql`
+      DROP TABLE IF EXISTS "Messages" CASCADE;
+
+      CREATE TABLE "Messages" (
+        "messageId" BIGINT NOT NULL,
+        "userId" BIGINT REFERENCES "Users"("userId") ON DELETE SET NULL,
+        "channelId" BIGINT REFERENCES "Channels"("channelId") ON DELETE SET NULL,
+        "workspaceId" BIGINT NOT NULL REFERENCES "Workspaces"("workspaceId") ON DELETE SET NULL,
+        "parentMessageId" BIGINT,
+        "content" TEXT NOT NULL,
+        "deleted" BOOLEAN DEFAULT FALSE,
+        "postedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY ("messageId", "workspaceId")
+      ) PARTITION BY LIST ("workspaceId");
+
+      -- Create default partition
+      CREATE TABLE IF NOT EXISTS "Messages_default" PARTITION OF "Messages" DEFAULT;
+    `);
+
+    // Create indexes
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_messages_channel_id ON "Messages" ("channelId");
+      CREATE INDEX IF NOT EXISTS idx_messages_posted_at ON "Messages" ("postedAt");
+      CREATE INDEX IF NOT EXISTS idx_messages_channel_posted_at ON "Messages" ("channelId", "postedAt");
+      CREATE INDEX IF NOT EXISTS idx_messages_parent_id ON "Messages" ("parentMessageId");
+      CREATE INDEX IF NOT EXISTS idx_messages_not_deleted ON "Messages" ("channelId", "postedAt") 
+        WHERE deleted = false;
+    `);
+
+    console.log('Successfully set up message partitioning');
+  } catch (error) {
+    console.error('Error setting up message partitioning:', error);
+    throw error;
+  }
+}
+
 // Function to create updatedAt trigger
 async function createUpdatedAtTrigger() {
   await db.execute(sql`
@@ -95,13 +144,6 @@ async function createTableTriggers() {
   }
 }
 
-// Function to create message partitions
-async function createMessagePartitions() {
-  await db.execute(sql`
-    CREATE TABLE IF NOT EXISTS "Messages_default" PARTITION OF "Messages" DEFAULT;
-  `);
-}
-
 // Function to create partial indexes
 async function createPartialIndexes() {
   // Users partial index for non-deactivated users
@@ -136,12 +178,12 @@ export async function migrate() {
     // Convert all ID columns to BIGSERIAL
     await convertToBigSerial();
 
+    // Setup message partitioning
+    await setupMessagePartitioning();
+
     // Create triggers
     await createUpdatedAtTrigger();
     await createTableTriggers();
-
-    // Create message partitions
-    await createMessagePartitions();
 
     // Create partial indexes
     await createPartialIndexes();
