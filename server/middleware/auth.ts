@@ -36,7 +36,7 @@ passport.use(new LocalStrategy(
         where: eq(users.email, email)
       });
 
-      if (!user) {
+      if (!user || !user.passwordHash) {
         return done(null, false, { message: 'INVALID_CREDENTIALS' });
       }
 
@@ -48,7 +48,7 @@ passport.use(new LocalStrategy(
         return done(null, false, { message: 'USER_DEACTIVATED' });
       }
 
-      const isValidPassword = await compare(password, user.passwordHash || '');
+      const isValidPassword = await compare(password, user.passwordHash);
       if (!isValidPassword) {
         return done(null, false, { message: 'INVALID_CREDENTIALS' });
       }
@@ -104,11 +104,10 @@ passport.deserializeUser(async (id: number, done) => {
 
 // Helper function to extract token from Authorization header
 function extractToken(req: Request): string | null {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return authHeader.substring(7); // Remove 'Bearer ' prefix
-  }
-  return null;
+  if (!req.headers.authorization) return null;
+
+  const [type, token] = req.headers.authorization.split(' ');
+  return type === 'Bearer' ? token : null;
 }
 
 // Helper function to validate JWT token and attach user
@@ -143,24 +142,35 @@ async function validateJwtToken(req: Request): Promise<boolean> {
 // Middleware to check if user is authenticated via session or JWT
 export const isAuthenticated = async (req: Request, res: Response, next: NextFunction) => {
   // First check session authentication
-  if (req.isAuthenticated()) {
+  if (req.isAuthenticated() && req.user) {
     return next();
   }
 
   // Then check JWT token
-  const isValidToken = await validateJwtToken(req);
-  if (isValidToken) {
-    return next();
-  }
-
-  // If neither authentication method is valid, return unauthorized
-  res.status(401).json({
-    error: "Unauthorized",
-    details: {
-      code: "UNAUTHORIZED",
-      message: "Authentication required"
+  try {
+    const isValidToken = await validateJwtToken(req);
+    if (isValidToken) {
+      return next();
     }
-  });
+
+    // If neither authentication method is valid, return unauthorized
+    res.status(401).json({
+      error: "Unauthorized",
+      details: {
+        code: "UNAUTHORIZED",
+        message: "Authentication required"
+      }
+    });
+  } catch (error) {
+    console.error('Authentication error:', error);
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: {
+        code: "SERVER_ERROR",
+        message: "Authentication error occurred"
+      }
+    });
+  }
 };
 
 export default passport;
