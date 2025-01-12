@@ -58,7 +58,7 @@ export const channels = pgTable('Channels', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 }, (table) => ({
-  workspaceNameIdx: uniqueIndex('idx_channels_workspace_name').on(table.workspaceId, sql`lower(${table.name})`),
+  workspaceNameIdx: uniqueIndex('idx_channels_workspace_name').on(table.workspaceId, table.name),
   notArchivedIdx: index('idx_channels_not_archived').on(table.workspaceId, table.name).where(sql`${table.archived} = false`)
 }));
 
@@ -98,6 +98,7 @@ export const files = pgTable('Files', {
   fileUrl: varchar('fileUrl', { length: 255 }),
   fileSize: bigint('fileSize', { mode: 'number' }),
   fileHash: varchar('fileHash', { length: 64 }),
+  softDeleted: boolean('softDeleted').default(false),
   uploadTime: timestamp('uploadTime').defaultNow(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
@@ -105,7 +106,8 @@ export const files = pgTable('Files', {
   messageFk: foreignKey({
     columns: [table.messageId, table.workspaceId],
     foreignColumns: [messages.messageId, messages.workspaceId]
-  }).onDelete('set null')
+  }).onDelete('set null'),
+  notDeletedIdx: index('idx_files_not_deleted').on(table.userId, table.fileId).where(sql`${table.softDeleted} = false`)
 }));
 
 // Emojis table
