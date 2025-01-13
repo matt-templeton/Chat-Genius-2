@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { hash, compare } from "bcrypt";
 import { db } from "@db";
-import { users, workspaces, channels } from "@db/schema";
+import { users } from "@db/schema";
 import { eq } from "drizzle-orm";
 import passport from "../middleware/auth";
 import type { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { isAuthenticated } from "../middleware/auth";
+import { createNewWorkspace } from "./workspaces";
 
 const router = Router();
 
@@ -93,26 +94,14 @@ router.post("/register", async (req: Request, res: Response) => {
     // Hash password
     const passwordHash = await hash(password, 10);
 
-    // Create default workspace first
-    const [workspace] = await db
-      .insert(workspaces)
-      .values({
-        name: `${displayName}'s Workspace`,
-        description: "Default workspace",
-        archived: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
-
-    // Create user with default workspace
+    // Create user first
     const [user] = await db
       .insert(users)
       .values({
         email,
         passwordHash,
         displayName,
-        defaultWorkspace: workspace.workspaceId,
+        defaultWorkspace: null, // We'll update this after creating the workspace
         emailVerified: false,
         deactivated: false,
         lastKnownPresence: "ONLINE",
@@ -122,10 +111,20 @@ router.post("/register", async (req: Request, res: Response) => {
       })
       .returning();
 
-    // Auto-verify for testing
+    // Create default workspace using the extracted function
+    const workspace = await createNewWorkspace(
+      user.userId,
+      `${displayName}'s Workspace`,
+      "Default workspace"
+    );
+
+    // Update user with the default workspace
     await db
       .update(users)
-      .set({ emailVerified: true })
+      .set({ 
+        defaultWorkspace: workspace.workspaceId,
+        emailVerified: true // Auto-verify for testing
+      })
       .where(eq(users.userId, user.userId));
 
     res.status(201).json({
