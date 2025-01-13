@@ -54,10 +54,10 @@ export default function SignupPage() {
 
   const mutation = useMutation({
     mutationFn: registerUser,
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({
         title: "Success",
-        description: "Account created successfully. Please log in.",
+        description: `Account created successfully with workspace "${data.workspace.name}". Please log in.`,
       });
       setLocation("/login");
     },

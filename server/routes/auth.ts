@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { hash, compare } from 'bcrypt';
 import { db } from "@db";
-import { users } from "@db/schema";
+import { users, workspaces } from "@db/schema";
 import { eq } from "drizzle-orm";
 import passport from '../middleware/auth';
 import type { Request, Response } from 'express';
@@ -85,28 +85,47 @@ router.post('/register', async (req: Request, res: Response) => {
     // Hash password
     const passwordHash = await hash(password, 10);
 
-    // Create user
-    const [user] = await db.insert(users)
-      .values({
-        email,
-        passwordHash,
-        displayName,
-        emailVerified: false,
-        deactivated: false,
-        lastKnownPresence: 'ONLINE',
-        lastLogin: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date()
-      })
-      .returning();
+    // Create user and default workspace in a transaction
+    const result = await db.transaction(async (tx) => {
+      // Create user
+      const [user] = await tx.insert(users)
+        .values({
+          email,
+          passwordHash,
+          displayName,
+          emailVerified: false,
+          deactivated: false,
+          lastKnownPresence: 'ONLINE',
+          lastLogin: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
 
-    // Auto-verify for testing
-    await db.update(users)
-      .set({ emailVerified: true })
-      .where(eq(users.userId, user.userId));
+      // Auto-verify for testing
+      await tx.update(users)
+        .set({ emailVerified: true })
+        .where(eq(users.userId, user.userId));
+
+      // Create default workspace
+      const [workspace] = await tx.insert(workspaces)
+        .values({
+          name: `${displayName}'s Workspace`,
+          ownerId: user.userId,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      return { user, workspace };
+    });
 
     res.status(201).json({
-      message: "User created successfully"
+      message: "User created successfully",
+      workspace: {
+        id: result.workspace.workspaceId,
+        name: result.workspace.name
+      }
     });
   } catch (error) {
     console.error('Registration error:', error);
