@@ -17,8 +17,12 @@ import {
   emojiRouter 
 } from './routes/index';
 import express from 'express';
+import { WebSocket, WebSocketServer } from 'ws';
 
 const MemoryStoreSession = MemoryStore(session);
+
+// Store connected clients by workspace
+const clients: Map<number, Set<WebSocket>> = new Map();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Create uploads directory if it doesn't exist
@@ -61,7 +65,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Workspace and workspace-specific channel routes
   app.use(`${apiPrefix}/workspaces`, workspaceRouter);
-  // Note: channelRouter handles both workspace-specific and global channel routes
   app.use(`${apiPrefix}/workspaces`, channelRouter); // For /workspaces/:workspaceId/channels endpoints
 
   // Global channel routes and channel-specific operations
@@ -81,6 +84,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Create HTTP server
   const httpServer = createServer(app);
+
+  // Create WebSocket server
+  const wss = new WebSocketServer({ 
+    server: httpServer,
+    verifyClient: ({ req }, done) => {
+      // Ignore vite-hmr protocol requests during development
+      if (req.headers['sec-websocket-protocol'] === 'vite-hmr') {
+        return done(false);
+      }
+      done(true);
+    }
+  });
+
+  // WebSocket connection handling
+  wss.on('connection', (ws, req) => {
+    // Extract workspaceId from query parameters
+    const url = new URL(req.url!, `http://${req.headers.host}`);
+    const workspaceId = parseInt(url.searchParams.get('workspaceId') || '0');
+
+    if (!workspaceId) {
+      ws.close(1008, 'Workspace ID is required');
+      return;
+    }
+
+    // Add client to workspace's client set
+    if (!clients.has(workspaceId)) {
+      clients.set(workspaceId, new Set());
+    }
+    clients.get(workspaceId)!.add(ws);
+
+    // Handle client disconnection
+    ws.on('close', () => {
+      const workspaceClients = clients.get(workspaceId);
+      if (workspaceClients) {
+        workspaceClients.delete(ws);
+        if (workspaceClients.size === 0) {
+          clients.delete(workspaceId);
+        }
+      }
+    });
+
+    ws.on('message', (message) => {
+      try {
+        const parsedMessage = JSON.parse(message.toString());
+        // Handle incoming messages here, potentially broadcasting to other clients
+        console.log('Received message:', parsedMessage);
+        app.locals.broadcastToWorkspace(workspaceId, parsedMessage);
+
+      } catch (error) {
+        console.error('Failed to parse message:', error);
+      }
+    });
+  });
+
+  // Export broadcast function to be used by channel routes
+  app.locals.broadcastToWorkspace = (workspaceId: number, message: any) => {
+    const workspaceClients = clients.get(workspaceId);
+    if (workspaceClients) {
+      const messageStr = JSON.stringify(message);
+      workspaceClients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(messageStr);
+        }
+      });
+    }
+  };
 
   return httpServer;
 }
