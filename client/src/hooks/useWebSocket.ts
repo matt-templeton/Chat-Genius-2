@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -12,34 +13,24 @@ export function useWebSocket({
 }: WebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const reconnectAttempts = useRef(0);
+  const maxReconnectAttempts = 5;
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const { toast } = useToast();
 
   const connect = useCallback(() => {
-    // Don't try to connect if workspaceId is invalid
-    if (!workspaceId || workspaceId <= 0) {
-      console.log(
-        "Skipping WebSocket connection - invalid workspace ID:",
-        workspaceId,
-      );
+    if (!workspaceId || workspaceId <= 0 || isConnecting || wsRef.current?.readyState === WebSocket.OPEN) {
       return;
     }
 
-    // Don't attempt to connect if we're already in the process
-    if (isConnecting) {
-      console.log("Connection attempt already in progress, skipping");
-      return;
-    }
-
-    // Don't connect if already connected
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      console.log("WebSocket already connected to workspace:", workspaceId);
-      return;
+    // Clean up existing connection first
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
 
     try {
-      console.log("Attempting WebSocket connection to workspace:", workspaceId);
       setIsConnecting(true);
-
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const ws = new WebSocket(
         `${protocol}//${window.location.host}/ws?workspaceId=${workspaceId}`,
@@ -48,23 +39,13 @@ export function useWebSocket({
       ws.onopen = () => {
         console.log("WebSocket connected to workspace:", workspaceId);
         setIsConnecting(false);
-        toast({
-          title: "Connected",
-          description: `Connected to workspace ${workspaceId}`,
-        });
+        reconnectAttempts.current = 0;
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log("WebSocket received message:", data);
-
-          if (
-            onChannelEvent &&
-            ["CHANNEL_CREATED", "CHANNEL_UPDATED", "CHANNEL_ARCHIVED"].includes(
-              data.type,
-            )
-          ) {
+          if (onChannelEvent && ["CHANNEL_CREATED", "CHANNEL_UPDATED", "CHANNEL_ARCHIVED"].includes(data.type)) {
             onChannelEvent(data);
           }
         } catch (error) {
@@ -72,85 +53,53 @@ export function useWebSocket({
         }
       };
 
-      ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
+      ws.onerror = () => {
         setIsConnecting(false);
-        toast({
-          title: "Connection Error",
-          description: "Failed to connect to workspace. Please refresh the page to try again.",
-          variant: "destructive",
-        });
       };
 
-      ws.onclose = (event) => {
-        console.log(
-          "WebSocket disconnected from workspace:",
-          workspaceId,
-          "Code:",
-          event.code,
-          "Reason:",
-          event.reason,
-        );
+      ws.onclose = () => {
         setIsConnecting(false);
         wsRef.current = null;
 
-        // Only show toast for unexpected closures
-        if (event.code !== 1000 && event.code !== 1001) {
-          toast({
-            title: "Connection Lost",
-            description: "Lost connection to workspace. Please refresh the page to reconnect.",
-            variant: "destructive",
-          });
+        if (reconnectAttempts.current < maxReconnectAttempts) {
+          const backoffTime = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
+          reconnectAttempts.current++;
+          
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+          }
+          
+          reconnectTimeoutRef.current = setTimeout(connect, backoffTime);
         }
       };
 
       wsRef.current = ws;
     } catch (error) {
-      console.error("Error creating WebSocket connection:", error);
       setIsConnecting(false);
-      toast({
-        title: "Connection Error",
-        description: "Failed to establish connection. Please refresh the page to try again.",
-        variant: "destructive",
-      });
+      console.error("WebSocket connection error:", error);
     }
-  }, [workspaceId, onChannelEvent, toast, isConnecting]);
+  }, [workspaceId, onChannelEvent]);
 
   useEffect(() => {
-    if (!workspaceId || workspaceId <= 0) {
-      return;
-    }
-
-    console.log("Initiating WebSocket connection for workspace:", workspaceId);
-
-    // Close existing connection when switching workspaces
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      console.log("Closing existing connection for workspace change");
-      wsRef.current.close(1000, "Workspace changed");
-      wsRef.current = null;
-    }
-
     connect();
 
     return () => {
-      console.log("Cleaning up WebSocket connection for workspace:", workspaceId);
-
-      setIsConnecting(false);
-
-      // Close the connection with a normal closure code
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
       if (wsRef.current) {
-        wsRef.current.close(1000, "Component unmounted");
+        wsRef.current.close();
         wsRef.current = null;
       }
+      setIsConnecting(false);
+      reconnectAttempts.current = 0;
     };
-  }, [connect, workspaceId]);
+  }, [connect]);
 
   return {
     send: useCallback((message: any) => {
       if (wsRef.current?.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify(message));
-      } else {
-        console.warn("Cannot send message - WebSocket is not connected");
       }
     }, []),
   };

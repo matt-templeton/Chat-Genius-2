@@ -6,6 +6,9 @@ import { log } from '../utils/logger';
 export class WebSocketManager {
   private wss: WebSocketServer;
   private clients: Map<WebSocket, WebSocketClient> = new Map();
+  private connectionsByIp: Map<string, number> = new Map();
+  private readonly MAX_CONNECTIONS_PER_IP = 3;
+  private readonly CONNECTION_TIMEOUT = 5000; // 5 seconds
 
   constructor(server: Server) {
     this.wss = new WebSocketServer({ 
@@ -57,6 +60,24 @@ export class WebSocketManager {
 
   private handleConnection(ws: WebSocket, request: any): void {
     try {
+      const ip = request.headers['x-forwarded-for'] || request.socket.remoteAddress;
+      const currentConnections = this.connectionsByIp.get(ip) || 0;
+
+      if (currentConnections >= this.MAX_CONNECTIONS_PER_IP) {
+        ws.close(1013, 'Too many connections');
+        return;
+      }
+
+      this.connectionsByIp.set(ip, currentConnections + 1);
+      
+      // Clear connection count after timeout
+      setTimeout(() => {
+        const count = this.connectionsByIp.get(ip);
+        if (count && count > 0) {
+          this.connectionsByIp.set(ip, count - 1);
+        }
+      }, this.CONNECTION_TIMEOUT);
+
       // Skip processing for Vite HMR connections
       if (request.headers['sec-websocket-protocol'] === 'vite-hmr') {
         log('Processing Vite HMR connection');
