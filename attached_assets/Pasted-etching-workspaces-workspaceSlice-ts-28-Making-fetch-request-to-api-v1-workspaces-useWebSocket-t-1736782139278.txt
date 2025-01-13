@@ -1,0 +1,58 @@
+etching workspaces...
+workspaceSlice.ts:28 Making fetch request to /api/v1/workspaces
+useWebSocket.ts:128 Cleaning up WebSocket connection for workspace: 0
+WorkspaceNavigation.tsx:54 Fetching workspaces...
+workspaceSlice.ts:28 Making fetch request to /api/v1/workspaces
+useWebSocket.ts:128 Cleaning up WebSocket connection for workspace: 0
+workspaceSlice.ts:42 Fetch workspaces response: [{…}]
+useWebSocket.ts:128 Cleaning up WebSocket connection for workspace: 0
+WorkspaceNavigation.tsx:56 Fetched workspaces: [{…}]
+useWebSocket.ts:128 Cleaning up WebSocket connection for workspace: 0
+WorkspaceNavigation.tsx:54 Fetching workspaces...
+workspaceSlice.ts:28 Making fetch request to /api/v1/workspaces
+useWebSocket.ts:123 Initiating WebSocket connection for workspace: 1
+useWebSocket.ts:44 Attempting WebSocket connection to workspace: 1
+useWebSocket.ts:128 Cleaning up WebSocket connection for workspace: 1
+150WebSocket connection to '<URL>' failed: WebSocket is closed before the connection is established.Understand this warningAI
+useWebSocket.ts:123 Initiating WebSocket connection for workspace: 1
+useWebSocket.ts:44 Attempting WebSocket connection to workspace: 1
+useWebSocket.ts:70 WebSocket error: Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+ws.onerror @ useWebSocket.ts:70
+error
+(anonymous) @ useWebSocket.ts:69
+(anonymous) @ useWebSocket.ts:124
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=3cb411bc:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=3cb411bc:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=3cb411bc:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=3cb411bc:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=3cb411bc:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=3cb411bc:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=3cb411bc:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=3cb411bc:19416
+commitRoot @ chunk-RPCDYKBN.js?v=3cb411bc:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=3cb411bc:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=3cb411bc:9119
+(anonymous) @ chunk-RPCDYKBN.js?v=3cb411bc:18627Understand this errorAI
+useWebSocket.ts:82 WebSocket disconnected from workspace: 1 Code: 1006 Reason: 
+useWebSocket.ts:105 Scheduling reconnection attempt 1 in 1000ms...
+useWebSocket.ts:128 Cleaning up WebSocket connection for workspace: 1
+useWebSocket.ts:123 Initiating WebSocket connection for workspace: 1
+useWebSocket.ts:44 Attempting WebSocket connection to workspace: 1
+useWebSocket.ts:70 WebSocket error: Event {isTrusted: true, type: 'error', target: WebSocket, currentTarget: WebSocket, eventPhase: 2, …}
+ws.onerror @ useWebSocket.ts:70
+error
+(anonymous) @ useWebSocket.ts:69
+(anonymous) @ useWebSocket.ts:124
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=3cb411bc:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=3cb411bc:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=3cb411bc:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=3cb411bc:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=3cb411bc:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=3cb411bc:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=3cb411bc:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=3cb411bc:19416
+commitRoot @ chunk-RPCDYKBN.js?v=3cb411bc:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=3cb411bc:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=3cb411bc:9119
+(anonymous) @ chunk-RPCDYKBN.js?v=3cb411bc:18627Understand this errorAI
+useWebSocket.ts:82 WebSocket disconnected from workspace: 1 Code: 1006 Reason: 
