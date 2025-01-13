@@ -70,7 +70,7 @@
 						"websocket_events": [
 							"When a new channel is created in the workspace, the channel appears in the list.",
 							"When a channel recieves a message that channel's status in the ChannelList moves from unread to read."
-						]
+						],
 						"sub": [
 							{
 						        "name": "Channel Header",
@@ -214,6 +214,14 @@
 				        	}
 				        ]
 				    },
+				    {
+				    	"name": "ThreadViewer",
+				    	"description": "A side panel that opens on the right when a user opens a thread.",
+				    	"location": "right side of ChatArea.",
+				    	"sub": [
+				    		
+				    	]
+				    }
 				]
 			}
 		]

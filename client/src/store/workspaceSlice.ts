@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 
 export interface Workspace {
   workspaceId: number;
@@ -21,59 +21,75 @@ const initialState: WorkspaceState = {
 };
 
 export const fetchWorkspaces = createAsyncThunk(
-  'workspace/fetchWorkspaces',
+  "workspace/fetchWorkspaces",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await fetch('/api/v1/workspaces', {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        return rejectWithValue("No authentication token found");
+      }
+
+      const response = await fetch("/api/v1/workspaces", {
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
         },
-        credentials: 'include',
+        credentials: "include",
       });
 
       if (!response.ok) {
         const errorData = await response.text();
-        return rejectWithValue(errorData || 'Failed to fetch workspaces');
+        return rejectWithValue(errorData || "Failed to fetch workspaces");
       }
 
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('Error in fetchWorkspaces:', error);
-      return rejectWithValue(error instanceof Error ? error.message : 'Failed to fetch workspaces');
+      console.error("Error in fetchWorkspaces:", error);
+      return rejectWithValue(
+        error instanceof Error ? error.message : "Failed to fetch workspaces",
+      );
     }
-  }
+  },
 );
 
 export const createWorkspace = createAsyncThunk(
-  'workspace/createWorkspace',
+  "workspace/createWorkspace",
   async (workspace: { name: string }, { rejectWithValue }) => {
     try {
-      const response = await fetch('/api/v1/workspaces', {
-        method: 'POST',
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        return rejectWithValue("No authentication token found");
+      }
+
+      const response = await fetch("/api/v1/workspaces", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
         },
-        credentials: 'include',
+        credentials: "include",
         body: JSON.stringify(workspace),
       });
 
       if (!response.ok) {
         const errorData = await response.text();
-        return rejectWithValue(errorData || 'Failed to create workspace');
+        return rejectWithValue(errorData || "Failed to create workspace");
       }
 
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('Error in createWorkspace:', error);
-      return rejectWithValue(error instanceof Error ? error.message : 'Failed to create workspace');
+      console.error("Error in createWorkspace:", error);
+      return rejectWithValue(
+        error instanceof Error ? error.message : "Failed to create workspace",
+      );
     }
-  }
+  },
 );
 
 const workspaceSlice = createSlice({
-  name: 'workspace',
+  name: "workspace",
   initialState,
   reducers: {
     setCurrentWorkspace: (state, action) => {
