@@ -24,10 +24,15 @@ export const fetchWorkspaces = createAsyncThunk(
   "workspace/fetchWorkspaces",
   async (_, { rejectWithValue }) => {
     try {
-      console.log("HERE???");
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        return rejectWithValue("No authentication token found");
+      }
+
       const response = await fetch("/api/v1/workspaces", {
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
         },
         credentials: "include",
       });
@@ -52,10 +57,16 @@ export const createWorkspace = createAsyncThunk(
   "workspace/createWorkspace",
   async (workspace: { name: string }, { rejectWithValue }) => {
     try {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        return rejectWithValue("No authentication token found");
+      }
+
       const response = await fetch("/api/v1/workspaces", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
         },
         credentials: "include",
         body: JSON.stringify(workspace),
