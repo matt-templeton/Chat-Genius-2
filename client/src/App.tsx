@@ -9,6 +9,7 @@ import LoginPage from "@/pages/login";
 import ChatPage from "@/pages/chat";
 import SignupPage from "@/pages/signup";
 import { WorkspaceNavigation } from "@/components/WorkspaceNavigation";
+import { ChannelList } from "@/components/ChannelList";
 import React from 'react';
 
 // ChatLayout component to wrap the chat page with workspace navigation
@@ -17,6 +18,9 @@ function ChatLayout({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen">
       <aside className="w-64 border-r border-border bg-background">
         <WorkspaceNavigation />
+      </aside>
+      <aside className="w-64 border-r border-border bg-background">
+        <ChannelList />
       </aside>
       <main className="flex-1 overflow-auto">
         {children}
@@ -45,7 +49,6 @@ function Router() {
       <Route path="/">
         {() => {
           // Redirect to chat if logged in, otherwise to login
-          // TODO: Add authentication check here
           window.location.href = '/login';
           return null;
         }}
