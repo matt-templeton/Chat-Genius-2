@@ -1,7 +1,7 @@
 import WebSocket, { WebSocketServer } from 'ws';
 import { Server } from 'http';
 import type { WebSocketClient, ChannelEvent } from './types';
-import { log } from '../vite';
+import { log } from '../utils/logger';
 
 export class WebSocketManager {
   private wss: WebSocketServer;
