@@ -6,6 +6,8 @@ import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
 import { z } from 'zod';
 
+const router = Router();
+
 // Input validation schemas
 const createWorkspaceSchema = z.object({
   name: z.string().min(1, "Workspace name is required"),
@@ -16,41 +18,6 @@ const updateWorkspaceSchema = z.object({
   name: z.string().min(1, "Workspace name is required"),
   description: z.string().optional(),
 });
-
-export async function createNewWorkspace(userId: number, name: string, description?: string) {
-  // Create workspace
-  const [workspace] = await db.insert(workspaces).values({
-    name,
-    description,
-    archived: false,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  }).returning();
-
-  // Add creator as workspace owner
-  await db.insert(userWorkspaces).values({
-    userId,
-    workspaceId: workspace.workspaceId,
-    role: 'OWNER',
-    createdAt: new Date(),
-    updatedAt: new Date()
-  });
-
-  // Create default general channel
-  await db.insert(channels).values({
-    workspaceId: workspace.workspaceId,
-    name: 'general',
-    topic: 'Default channel for general discussions',
-    channelType: 'PUBLIC',
-    archived: false,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  });
-
-  return workspace;
-}
-
-const router = Router();
 
 /**
  * @route GET /workspaces
@@ -109,7 +76,36 @@ router.post('/', isAuthenticated, async (req: Request, res: Response) => {
     }
 
     const { name, description } = validationResult.data;
-    const workspace = await createNewWorkspace(req.user!.userId, name, description);
+
+    // Create workspace
+    const [workspace] = await db.insert(workspaces).values({
+      name,
+      description,
+      archived: false,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+
+    // Add creator as workspace owner
+    await db.insert(userWorkspaces).values({
+      userId: req.user!.userId,
+      workspaceId: workspace.workspaceId,
+      role: 'OWNER',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    // Create default general channel
+    await db.insert(channels).values({
+      workspaceId: workspace.workspaceId,
+      name: 'general',
+      topic: 'Default channel for general discussions',
+      channelType: 'PUBLIC',
+      archived: false,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
     res.status(201).json(workspace);
   } catch (error) {
     console.error('Error creating workspace:', error);
