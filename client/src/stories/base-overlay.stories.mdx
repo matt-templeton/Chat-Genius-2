@@ -1,0 +1,30 @@
+import { Meta, Story, Canvas } from '@storybook/addon-docs';
+import { BaseOverlay } from '@/components/ui/base-overlay';
+
+<Meta title="Components/BaseOverlay" component={BaseOverlay} />
+
+# BaseOverlay
+
+A fundamental modal overlay component used throughout the application.
+
+<Canvas>
+  <Story name="Default">
+    {() => {
+      const [isOpen, setIsOpen] = React.useState(false);
+      return (
+        <>
+          <button onClick={() => setIsOpen(true)}>Open Overlay</button>
+          <BaseOverlay 
+            visible={isOpen} 
+            onClose={() => setIsOpen(false)}
+          >
+            <div className="p-4">
+              <h2 className="text-lg font-semibold mb-2">Sample Overlay Content</h2>
+              <p>This is a basic example of the BaseOverlay component.</p>
+            </div>
+          </BaseOverlay>
+        </>
+      );
+    }}
+  </Story>
+</Canvas>
