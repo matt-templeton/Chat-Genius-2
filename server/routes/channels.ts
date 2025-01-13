@@ -29,7 +29,7 @@ const addMemberSchema = z.object({
  * @route GET /api/v1/workspaces/{workspaceId}/channels
  * @desc List channels in a workspace
  */
-router.get('/workspaces/:workspaceId/channels', isAuthenticated, async (req: Request, res: Response) => {
+router.get('/:workspaceId/channels', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { workspaceId } = req.params;
     const { includeArchived = false } = req.query;
@@ -78,7 +78,7 @@ router.get('/workspaces/:workspaceId/channels', isAuthenticated, async (req: Req
  * @route POST /api/v1/channels
  * @desc Create a new channel
  */
-router.post('/channels', isAuthenticated, async (req: Request, res: Response) => {
+router.post('/', isAuthenticated, async (req: Request, res: Response) => {
   try {
     // Validate input
     const validationResult = createChannelSchema.safeParse(req.body);
