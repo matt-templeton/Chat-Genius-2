@@ -4,8 +4,19 @@ import { messages, channels } from "@db/schema";
 import { eq, and, desc, lt } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
+import { z } from 'zod';
 
 const router = Router();
+
+// Input validation schemas
+const createMessageSchema = z.object({
+  content: z.string().min(1, "Message content cannot be empty"),
+  parentMessageId: z.number().int().positive().optional()
+});
+
+const updateMessageSchema = z.object({
+  content: z.string().min(1, "Message content cannot be empty")
+});
 
 /**
  * @route POST /channels/:channelId/messages
@@ -14,18 +25,20 @@ const router = Router();
 router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { channelId } = req.params;
-    const { content, parentMessageId } = req.body;
+    const validationResult = createMessageSchema.safeParse(req.body);
 
-    // Validate content
-    if (!content || content.trim().length === 0) {
+    if (!validationResult.success) {
       return res.status(400).json({
         error: "Invalid Content",
         details: {
-          code: "INVALID_CONTENT",
-          message: "Message content cannot be empty"
+          code: "VALIDATION_ERROR",
+          message: "Invalid message data",
+          errors: validationResult.error.errors
         }
       });
     }
+
+    const { content, parentMessageId } = validationResult.data;
 
     // First get the channel to get its workspaceId
     const channel = await db.query.channels.findFirst({
@@ -37,7 +50,7 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
         error: "Channel Not Found",
         details: {
           code: "CHANNEL_NOT_FOUND",
-          message: "The specified channel does not exist"
+          message: "Channel not found"
         }
       });
     }
@@ -46,7 +59,7 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
     if (parentMessageId) {
       const parentMessage = await db.query.messages.findFirst({
         where: and(
-          eq(messages.messageId, parseInt(parentMessageId)),
+          eq(messages.messageId, parentMessageId),
           eq(messages.workspaceId, channel.workspaceId)
         )
       });
@@ -56,7 +69,7 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
           error: "Parent Message Not Found",
           details: {
             code: "PARENT_MESSAGE_NOT_FOUND",
-            message: "The specified parent message does not exist in this workspace"
+            message: "Parent message not found"
           }
         });
       }
@@ -71,7 +84,7 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
         channelId: parseInt(channelId),
         userId: req.user!.userId,
         content,
-        parentMessageId: parentMessageId ? parseInt(parentMessageId) : null,
+        parentMessageId: parentMessageId || null,
         deleted: false,
         postedAt: now,
         createdAt: now,
@@ -99,7 +112,10 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
 router.get('/:channelId/messages', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { channelId } = req.params;
-    const { limit = '20', offset = '0', before, includeDeleted = false } = req.query;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const offset = parseInt(req.query.offset as string) || 0;
+    const before = req.query.before as string | undefined;
+    const includeDeleted = req.query.includeDeleted === 'true';
 
     // Get channel first to verify it exists and get workspaceId
     const channel = await db.query.channels.findFirst({
@@ -111,7 +127,7 @@ router.get('/:channelId/messages', isAuthenticated, async (req: Request, res: Re
         error: "Channel Not Found",
         details: {
           code: "CHANNEL_NOT_FOUND",
-          message: "The specified channel does not exist"
+          message: "Channel not found"
         }
       });
     }
@@ -126,14 +142,14 @@ router.get('/:channelId/messages', isAuthenticated, async (req: Request, res: Re
     }
 
     if (before) {
-      conditions.push(lt(messages.postedAt, new Date(before as string)));
+      conditions.push(lt(messages.postedAt, new Date(before)));
     }
 
     const messagesList = await db.query.messages.findMany({
       where: and(...conditions),
       orderBy: [desc(messages.postedAt)],
-      limit: parseInt(limit as string),
-      offset: parseInt(offset as string)
+      limit,
+      offset
     });
 
     res.json(messagesList);
@@ -166,7 +182,7 @@ router.get('/:messageId', isAuthenticated, async (req: Request, res: Response) =
         error: "Message Not Found",
         details: {
           code: "MESSAGE_NOT_FOUND",
-          message: "The requested message does not exist"
+          message: "Message not found"
         }
       });
     }
@@ -191,18 +207,20 @@ router.get('/:messageId', isAuthenticated, async (req: Request, res: Response) =
 router.put('/:messageId', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { messageId } = req.params;
-    const { content } = req.body;
+    const validationResult = updateMessageSchema.safeParse(req.body);
 
-    // Validate content
-    if (!content || content.trim().length === 0) {
+    if (!validationResult.success) {
       return res.status(400).json({
         error: "Invalid Content",
         details: {
-          code: "INVALID_CONTENT",
-          message: "Message content cannot be empty"
+          code: "VALIDATION_ERROR",
+          message: "Invalid message data",
+          errors: validationResult.error.errors
         }
       });
     }
+
+    const { content } = validationResult.data;
 
     // First get the message to verify ownership and get workspaceId
     const existingMessage = await db.query.messages.findFirst({
@@ -214,7 +232,7 @@ router.put('/:messageId', isAuthenticated, async (req: Request, res: Response) =
         error: "Message Not Found",
         details: {
           code: "MESSAGE_NOT_FOUND",
-          message: "The requested message does not exist"
+          message: "Message not found"
         }
       });
     }
@@ -283,7 +301,7 @@ router.delete('/:messageId', isAuthenticated, async (req: Request, res: Response
         error: "Message Not Found",
         details: {
           code: "MESSAGE_NOT_FOUND",
-          message: "The requested message does not exist"
+          message: "Message not found"
         }
       });
     }

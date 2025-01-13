@@ -52,21 +52,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Mount all routes under /api/v1 prefix
   const apiPrefix = '/api/v1';
+
+  // Authentication routes
   app.use(`${apiPrefix}/auth`, authRouter);
+
+  // User management routes
   app.use(`${apiPrefix}/users`, userRouter);
+
+  // Workspace and workspace-specific channel routes
   app.use(`${apiPrefix}/workspaces`, workspaceRouter);
-  app.use(`${apiPrefix}/workspaces`, channelRouter); // Mount workspace-related channel routes
-  app.use(`${apiPrefix}/channels`, channelRouter); // Mount channel-specific routes
+  // Note: channelRouter handles both workspace-specific and global channel routes
+  app.use(`${apiPrefix}/workspaces`, channelRouter); // For /workspaces/:workspaceId/channels endpoints
 
-  // Mount message-related routes
-  app.use(`${apiPrefix}/channels`, messageRouter);
-  app.use(`${apiPrefix}/messages`, messageRouter);
+  // Global channel routes and channel-specific operations
+  app.use(`${apiPrefix}/channels`, channelRouter);
 
-  // Mount reactions and pins under /messages since they're message-related
-  app.use(`${apiPrefix}/messages`, reactionRouter);
-  app.use(`${apiPrefix}/messages`, pinRouter);
+  // Message routes - both channel-specific and message-specific operations
+  app.use(`${apiPrefix}/channels`, messageRouter); // For /channels/:channelId/messages endpoints
+  app.use(`${apiPrefix}/messages`, messageRouter); // For /messages/:messageId endpoints
 
-  // Mount file and emoji routes
+  // Message-related features
+  app.use(`${apiPrefix}/messages`, reactionRouter); // For /messages/:messageId/reactions
+  app.use(`${apiPrefix}/messages`, pinRouter); // For /messages/:messageId/pin
+
+  // Standalone feature routes
   app.use(`${apiPrefix}/files`, fileRouter);
   app.use(`${apiPrefix}/emojis`, emojiRouter);
 

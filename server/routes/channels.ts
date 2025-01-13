@@ -13,7 +13,7 @@ const createChannelSchema = z.object({
   name: z.string().min(1, "Channel name is required"),
   workspaceId: z.number().int().positive("Valid workspace ID is required"),
   topic: z.string().optional(),
-  channelType: z.enum(['PUBLIC', 'PRIVATE']).default('PUBLIC')
+  type: z.enum(['PUBLIC', 'PRIVATE']).default('PUBLIC')
 });
 
 const updateChannelSchema = z.object({
@@ -32,7 +32,7 @@ const addMemberSchema = z.object({
 router.get('/:workspaceId/channels', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { workspaceId } = req.params;
-    const { includeArchived = false } = req.query;
+    const includeArchived = req.query.includeArchived === 'true';
 
     // Verify workspace exists first
     const workspace = await db.query.workspaces.findFirst({
@@ -44,12 +44,13 @@ router.get('/:workspaceId/channels', isAuthenticated, async (req: Request, res: 
         error: "Workspace Not Found",
         details: {
           code: "WORKSPACE_NOT_FOUND",
-          message: "The requested workspace does not exist"
+          message: "Workspace not found"
         }
       });
     }
 
-    const query = includeArchived ?
+    // Query channels based on includeArchived parameter
+    let channelsQuery = includeArchived ?
       db.query.channels.findMany({
         where: eq(channels.workspaceId, parseInt(workspaceId))
       }) :
@@ -60,7 +61,7 @@ router.get('/:workspaceId/channels', isAuthenticated, async (req: Request, res: 
         )
       });
 
-    const channelsList = await query;
+    const channelsList = await channelsQuery;
     res.json(channelsList);
   } catch (error) {
     console.error('Error fetching workspace channels:', error);
@@ -75,12 +76,39 @@ router.get('/:workspaceId/channels', isAuthenticated, async (req: Request, res: 
 });
 
 /**
+ * @route GET /api/v1/channels
+ * @desc Global: list all channels (admin only)
+ */
+router.get('/', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const includeArchived = req.query.includeArchived === 'true';
+
+    const channelsQuery = includeArchived ?
+      db.query.channels.findMany() :
+      db.query.channels.findMany({
+        where: eq(channels.archived, false)
+      });
+
+    const channelsList = await channelsQuery;
+    res.json(channelsList);
+  } catch (error) {
+    console.error('Error fetching all channels:', error);
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: {
+        code: "SERVER_ERROR",
+        message: "Failed to fetch channels"
+      }
+    });
+  }
+});
+
+/**
  * @route POST /api/v1/channels
  * @desc Create a new channel
  */
 router.post('/', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    // Validate input
     const validationResult = createChannelSchema.safeParse(req.body);
     if (!validationResult.success) {
       return res.status(400).json({
@@ -93,7 +121,7 @@ router.post('/', isAuthenticated, async (req: Request, res: Response) => {
       });
     }
 
-    const { name, topic, workspaceId, channelType } = validationResult.data;
+    const { name, topic, workspaceId, type } = validationResult.data;
 
     // Verify workspace exists
     const workspace = await db.query.workspaces.findFirst({
@@ -105,7 +133,7 @@ router.post('/', isAuthenticated, async (req: Request, res: Response) => {
         error: "Workspace Not Found",
         details: {
           code: "WORKSPACE_NOT_FOUND",
-          message: "The specified workspace does not exist"
+          message: "Workspace not found"
         }
       });
     }
@@ -114,7 +142,7 @@ router.post('/', isAuthenticated, async (req: Request, res: Response) => {
       name,
       topic,
       workspaceId,
-      channelType,
+      type,
       archived: false,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -157,7 +185,7 @@ router.get('/:channelId', isAuthenticated, async (req: Request, res: Response) =
         error: "Channel Not Found",
         details: {
           code: "CHANNEL_NOT_FOUND",
-          message: "The requested channel does not exist"
+          message: "Channel not found"
         }
       });
     }
@@ -183,7 +211,6 @@ router.put('/:channelId', isAuthenticated, async (req: Request, res: Response) =
   try {
     const { channelId } = req.params;
 
-    // Validate input
     const validationResult = updateChannelSchema.safeParse(req.body);
     if (!validationResult.success) {
       return res.status(400).json({
@@ -212,7 +239,7 @@ router.put('/:channelId', isAuthenticated, async (req: Request, res: Response) =
         error: "Channel Not Found",
         details: {
           code: "CHANNEL_NOT_FOUND",
-          message: "The requested channel does not exist"
+          message: "Channel not found"
         }
       });
     }
@@ -251,7 +278,7 @@ router.delete('/:channelId', isAuthenticated, async (req: Request, res: Response
         error: "Channel Not Found",
         details: {
           code: "CHANNEL_NOT_FOUND",
-          message: "The requested channel does not exist"
+          message: "Channel not found"
         }
       });
     }
