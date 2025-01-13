@@ -13,10 +13,17 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Archive, Loader2 } from 'lucide-react';
+import { Plus, Archive, Loader2, Lock, Hash } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch';
@@ -24,6 +31,7 @@ import { Switch } from '@/components/ui/switch';
 const createChannelSchema = z.object({
   name: z.string().min(1, 'Channel name is required').max(50, 'Name is too long'),
   description: z.string().max(255, 'Description is too long').optional(),
+  channelType: z.enum(['PUBLIC', 'PRIVATE']),
 });
 
 type CreateChannelForm = z.infer<typeof createChannelSchema>;
@@ -40,6 +48,7 @@ export function ChannelList() {
     defaultValues: {
       name: '',
       description: '',
+      channelType: 'PUBLIC',
     },
   });
 
@@ -71,11 +80,10 @@ export function ChannelList() {
         workspaceId: currentWorkspace.workspaceId,
         channel: {
           ...data,
-          channelType: 'PUBLIC',
           archived: false,
         }
       })).unwrap();
-      
+
       setCreateDialogOpen(false);
       form.reset();
       toast({
@@ -97,6 +105,17 @@ export function ChannelList() {
 
   const handleToggleArchived = () => {
     dispatch(toggleShowArchived());
+  };
+
+  const getChannelIcon = (channelType: string) => {
+    switch (channelType) {
+      case 'PRIVATE':
+        return <Lock className="h-4 w-4 mr-2" />;
+      case 'PUBLIC':
+        return <Hash className="h-4 w-4 mr-2" />;
+      default:
+        return null;
+    }
   };
 
   if (!currentWorkspace) {
@@ -162,7 +181,10 @@ export function ChannelList() {
                 variant={currentChannel?.channelId === channel.channelId ? "secondary" : "ghost"}
                 className="w-full justify-start font-normal"
               >
-                {channel.channelType === 'PUBLIC' ? '#' : '🔒'} {channel.name}
+                <span className="flex items-center">
+                  {getChannelIcon(channel.channelType)}
+                  {channel.name}
+                </span>
                 {channel.archived && (
                   <Archive className="ml-2 h-4 w-4 text-muted-foreground" />
                 )}
@@ -188,6 +210,30 @@ export function ChannelList() {
                     <FormControl>
                       <Input placeholder="Enter channel name" {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="channelType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Channel Type</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select channel type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="PUBLIC">Public</SelectItem>
+                        <SelectItem value="PRIVATE">Private</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

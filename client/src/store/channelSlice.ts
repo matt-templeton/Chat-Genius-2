@@ -61,7 +61,10 @@ export const createChannel = createAsyncThunk(
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(channel),
+        body: JSON.stringify({
+          ...channel,
+          workspaceId,
+        }),
       });
 
       if (!response.ok) {
