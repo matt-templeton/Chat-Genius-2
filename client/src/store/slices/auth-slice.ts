@@ -39,7 +39,11 @@ export const loginUser = createAsyncThunk(
       }
 
       const data = await response.json();
-      return data;
+      // Store the token in localStorage
+      if (data.accessToken) {
+        localStorage.setItem('accessToken', data.accessToken);
+      }
+      return data.user;
     } catch (error) {
       if (error instanceof Error) {
         return rejectWithValue(error.message);
@@ -57,6 +61,8 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.user = null;
       state.error = null;
+      // Clear the token on logout
+      localStorage.removeItem('accessToken');
     },
     clearError: (state) => {
       state.error = null;
@@ -79,6 +85,8 @@ const authSlice = createSlice({
         state.error = action.payload as string || 'An error occurred';
         state.isAuthenticated = false;
         state.user = null;
+        // Clear token on failed login
+        localStorage.removeItem('accessToken');
       });
   },
 });
