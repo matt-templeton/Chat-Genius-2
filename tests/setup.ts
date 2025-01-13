@@ -1,3 +1,4 @@
+
 import { db } from "../db";
 import { users, workspaces, channels } from "../db/schema";
 import { eq, inArray } from "drizzle-orm";
@@ -25,6 +26,10 @@ beforeAll(async () => {
     .from(users)
     .where(inArray(users.email, testEmails));
 
+  // Extract workspace IDs from test users
+  const workspaceIds = testUsers
+    .map(user => user.defaultWorkspace)
+    .filter((id): id is number => id !== null);
 
   // Delete in correct order to maintain referential integrity
   await db.delete(channels).where(inArray(channels.workspaceId, workspaceIds));
@@ -51,6 +56,11 @@ afterEach(async () => {
     .from(users)
     .where(inArray(users.email, testEmails));
 
+  // Extract workspace IDs from test users
+  const workspaceIds = testUsers
+    .map(user => user.defaultWorkspace)
+    .filter((id): id is number => id !== null);
+
   // Delete in correct order to maintain referential integrity
   await db.delete(channels).where(inArray(channels.workspaceId, workspaceIds));
   await db
@@ -76,6 +86,10 @@ afterAll(async () => {
     .from(users)
     .where(inArray(users.email, testEmails));
 
+  // Extract workspace IDs from test users
+  const workspaceIds = testUsers
+    .map(user => user.defaultWorkspace)
+    .filter((id): id is number => id !== null);
   
   // Delete in correct order to maintain referential integrity
   await db.delete(channels).where(inArray(channels.workspaceId, workspaceIds));
