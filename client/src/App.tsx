@@ -21,8 +21,12 @@ function ChatLayout({ children }: { children: React.ReactNode }) {
         <WorkspaceNavigation />
       </aside>
       <aside className="w-64 border-r border-border bg-background flex flex-col">
-        <ChannelList />
-        <DirectMessagesList />
+        <div className="flex-none">
+          <ChannelList />
+        </div>
+        <div className="flex-1 min-h-0">
+          <DirectMessagesList />
+        </div>
       </aside>
       <main className="flex-1 overflow-hidden">
         {children}

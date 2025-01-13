@@ -61,10 +61,6 @@ const createChannelSchema = z.object({
 
 type CreateChannelForm = z.infer<typeof createChannelSchema>;
 
-/**
- * ChannelList component displays all channels in the current workspace
- * and handles channel creation, selection, and real-time updates.
- */
 export function ChannelList() {
   const dispatch = useAppDispatch();
   const { channels, currentChannel, loading, error, showArchived } =
@@ -239,8 +235,8 @@ export function ChannelList() {
   }
 
   return (
-    <div className="space-y-4 py-4">
-      <div className="px-3 py-2">
+    <div className="flex flex-col flex-none py-2">
+      <div className="px-3">
         <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
           Channels
         </h2>
@@ -270,15 +266,15 @@ export function ChannelList() {
         </div>
       </div>
 
-      <ScrollArea className="h-[calc(100vh-16rem)]">
+      <ScrollArea className="h-[250px] px-3">
         {loading ? (
-          <div className="flex items-center justify-center py-8">
+          <div className="flex items-center justify-center py-4">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : error ? (
           <div className="px-4 py-2 text-destructive">{error}</div>
         ) : channels.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
+          <div className="flex flex-col items-center justify-center py-4 px-4 text-center">
             <p className="text-sm text-muted-foreground mb-4">
               No channels found
             </p>
