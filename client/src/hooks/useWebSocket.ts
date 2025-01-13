@@ -13,7 +13,9 @@ export function useWebSocket({
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 5;
+  const maxReconnectAttempts = 3;
+  const minReconnectDelay = 2000;
+  const maxReconnectDelay = 10000;
   const { toast } = useToast();
 
   const connect = useCallback(() => {
@@ -86,7 +88,7 @@ export function useWebSocket({
   }, [workspaceId, onChannelEvent, toast, isConnecting]);
 
   useEffect(() => {
-    connect();
+    const connectTimeout = setTimeout(connect, 1000);
     return () => {
       if (wsRef.current) {
         wsRef.current.close(1000, "Component unmounted");
