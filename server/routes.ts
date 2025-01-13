@@ -5,22 +5,26 @@ import MemoryStore from "memorystore";
 import passport from './middleware/auth';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { 
-  authRouter, 
-  userRouter, 
-  workspaceRouter, 
-  channelRouter, 
+import {
+  authRouter,
+  userRouter,
+  workspaceRouter,
+  channelRouter,
   messageRouter,
   reactionRouter,
   fileRouter,
   pinRouter,
-  emojiRouter 
+  emojiRouter
 } from './routes/index';
 import express from 'express';
+import { setupAuth } from "./auth";
 
 const MemoryStoreSession = MemoryStore(session);
 
-export async function registerRoutes(app: Express): Promise<Server> {
+export function registerRoutes(app: Express): Server {
+  // Setup authentication routes (/api/register, /api/login, /api/logout, /api/user)
+  setupAuth(app);
+
   // Create uploads directory if it doesn't exist
   const uploadsDir = path.join(process.cwd(), 'uploads');
   try {
@@ -52,7 +56,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Mount all routes under /api/v1 prefix
   const apiPrefix = '/api/v1';
-  app.use(`${apiPrefix}/auth`, authRouter);
   app.use(`${apiPrefix}/users`, userRouter);
   app.use(`${apiPrefix}/workspaces`, workspaceRouter);
   app.use(`${apiPrefix}/workspaces`, channelRouter); // Mount workspace-related channel routes

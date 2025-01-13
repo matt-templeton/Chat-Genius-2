@@ -1,38 +1,32 @@
 import { 
   pgTable, 
+  text,
+  serial,
+  timestamp,
+  varchar,
   bigserial,
-  varchar, 
-  text, 
-  boolean, 
-  timestamp, 
+  boolean,
   pgEnum,
   bigint,
   primaryKey,
   uniqueIndex,
   foreignKey,
-  index 
+  index
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+import { z } from "zod";
 
 // Enums
 export const userPresenceEnum = pgEnum('user_presence_enum', ['ONLINE', 'AWAY', 'DND', 'OFFLINE']);
 export const workspaceRoleEnum = pgEnum('workspace_role_enum', ['OWNER', 'ADMIN', 'MEMBER', 'GUEST']);
 export const channelTypeEnum = pgEnum('channel_type_enum', ['PUBLIC', 'PRIVATE', 'DM']);
 
-// Users table
-export const users = pgTable('Users', {
-  userId: bigserial('userId', { mode: 'number' }).primaryKey(),
-  email: varchar('email', { length: 254 }).notNull().unique(),
-  passwordHash: varchar('passwordHash', { length: 255 }),
-  displayName: varchar('displayName', { length: 50 }).notNull(),
-  profilePicture: varchar('profilePicture', { length: 255 }),
-  statusMessage: varchar('statusMessage', { length: 150 }),
-  lastKnownPresence: userPresenceEnum('lastKnownPresence').default('ONLINE'),
-  emailVerified: boolean('emailVerified').default(false),
-  lastLogin: timestamp('lastLogin'),
-  deactivated: boolean('deactivated').default(false),
-  theme: varchar('theme', { length: 20 }).default('light'),
+// Users table with authentication fields
+export const users = pgTable('users', {
+  id: serial('id').primaryKey(),
+  username: text('username').unique().notNull(),
+  password: text('password').notNull(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 });
@@ -65,7 +59,7 @@ export const channels = pgTable('Channels', {
 // Messages table (partitioned by workspaceId)
 export const messages = pgTable('Messages', {
   messageId: bigserial('messageId', { mode: 'number' }),
-  userId: bigint('userId', { mode: 'number' }).references(() => users.userId, { onDelete: 'set null' }),
+  userId: bigint('userId', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
   channelId: bigint('channelId', { mode: 'number' }).references(() => channels.channelId, { onDelete: 'set null' }),
   workspaceId: bigint('workspaceId', { mode: 'number' }).notNull().references(() => workspaces.workspaceId, { onDelete: 'set null' }),
   parentMessageId: bigint('parentMessageId', { mode: 'number' }),
@@ -90,7 +84,7 @@ export const messages = pgTable('Messages', {
 // Files table
 export const files = pgTable('Files', {
   fileId: bigserial('fileId', { mode: 'number' }).primaryKey(),
-  userId: bigint('userId', { mode: 'number' }).references(() => users.userId, { onDelete: 'set null' }),
+  userId: bigint('userId', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
   messageId: bigint('messageId', { mode: 'number' }),
   workspaceId: bigint('workspaceId', { mode: 'number' }),
   filename: varchar('filename', { length: 255 }).notNull(),
@@ -125,7 +119,7 @@ export const messageReactions = pgTable('MessageReactions', {
   messageId: bigint('messageId', { mode: 'number' }),
   workspaceId: bigint('workspaceId', { mode: 'number' }),
   emojiId: bigint('emojiId', { mode: 'number' }).references(() => emojis.emojiId, { onDelete: 'set null' }).notNull(),
-  userId: bigint('userId', { mode: 'number' }).references(() => users.userId, { onDelete: 'set null' }),
+  userId: bigint('userId', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 }, (table) => ({
@@ -143,7 +137,7 @@ export const messageReactions = pgTable('MessageReactions', {
 
 // User Workspaces table
 export const userWorkspaces = pgTable('UserWorkspaces', {
-  userId: bigint('userId', { mode: 'number' }).references(() => users.userId, { onDelete: 'set null' }),
+  userId: bigint('userId', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
   workspaceId: bigint('workspaceId', { mode: 'number' }).references(() => workspaces.workspaceId, { onDelete: 'set null' }),
   role: workspaceRoleEnum('role').default('MEMBER'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
@@ -155,7 +149,7 @@ export const userWorkspaces = pgTable('UserWorkspaces', {
 
 // User Channels table
 export const userChannels = pgTable('UserChannels', {
-  userId: bigint('userId', { mode: 'number' }).references(() => users.userId, { onDelete: 'set null' }),
+  userId: bigint('userId', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
   channelId: bigint('channelId', { mode: 'number' }).references(() => channels.channelId, { onDelete: 'set null' }),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
@@ -171,7 +165,7 @@ export const pinnedMessages = pgTable('PinnedMessages', {
   pinnedId: bigserial('pinnedId', { mode: 'number' }).primaryKey(),
   messageId: bigint('messageId', { mode: 'number' }),
   workspaceId: bigint('workspaceId', { mode: 'number' }),
-  pinnedBy: bigint('pinnedBy', { mode: 'number' }).references(() => users.userId, { onDelete: 'set null' }),
+  pinnedBy: bigint('pinnedBy', { mode: 'number' }).references(() => users.id, { onDelete: 'set null' }),
   pinnedReason: text('pinnedReason'),
   pinnedAt: timestamp('pinnedAt').notNull().defaultNow(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
@@ -184,7 +178,10 @@ export const pinnedMessages = pgTable('PinnedMessages', {
 }));
 
 // Export schemas for validation
-export const insertUserSchema = createInsertSchema(users);
+export const insertUserSchema = createInsertSchema(users, {
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
 export const selectUserSchema = createSelectSchema(users);
 export const insertWorkspaceSchema = createInsertSchema(workspaces);
 export const selectWorkspaceSchema = createSelectSchema(workspaces);
@@ -193,9 +190,11 @@ export const selectChannelSchema = createSelectSchema(channels);
 export const insertMessageSchema = createInsertSchema(messages);
 export const selectMessageSchema = createSelectSchema(messages);
 
+
 // Export types
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type SelectUser = z.infer<typeof selectUserSchema>;
 export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
 export type Workspace = typeof workspaces.$inferSelect;
 export type NewWorkspace = typeof workspaces.$inferInsert;
 export type Channel = typeof channels.$inferSelect;
