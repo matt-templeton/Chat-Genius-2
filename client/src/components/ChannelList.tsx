@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAppSelector } from "@/store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -6,6 +6,8 @@ import { Hash, Lock, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { useWebSocket } from "@/hooks/useWebSocket";
+import { ChannelCreateDialog } from "./ChannelCreateDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,11 +28,28 @@ interface Channel {
 
 export function ChannelList() {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const currentWorkspace = useAppSelector(state => state.workspace.currentWorkspace);
+  const queryClient = useQueryClient();
+
+  const channelsQueryKey = currentWorkspace?.workspaceId ? 
+    `/api/v1/workspaces/${currentWorkspace.workspaceId}/channels` : 
+    null;
 
   const { data: channels = [], isLoading } = useQuery<Channel[]>({
-    queryKey: [`/api/v1/workspaces/${currentWorkspace?.workspaceId}/channels`],
-    enabled: !!currentWorkspace?.workspaceId,
+    queryKey: [channelsQueryKey],
+    enabled: !!channelsQueryKey,
+  });
+
+  // Setup WebSocket connection for real-time updates
+  useWebSocket({
+    workspaceId: currentWorkspace?.workspaceId || 0,
+    onChannelEvent: (event) => {
+      if (event.type === 'CHANNEL_CREATED' && event.workspaceId === currentWorkspace?.workspaceId) {
+        // Invalidate the channels query to trigger a refresh
+        queryClient.invalidateQueries({ queryKey: [channelsQueryKey] });
+      }
+    },
   });
 
   if (!currentWorkspace) {
@@ -82,11 +101,20 @@ export function ChannelList() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-48">
               <DropdownMenuItem>Browse channels</DropdownMenuItem>
-              <DropdownMenuItem>Create channel</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCreateDialogOpen(true)}>
+                Create channel
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
+
+      {/* Channel Create Dialog */}
+      <ChannelCreateDialog
+        workspaceId={currentWorkspace.workspaceId}
+        open={createDialogOpen}
+        onOpenChange={setCreateDialogOpen}
+      />
 
       {/* Channel List */}
       {isExpanded && activeChannels.map((channel) => (
