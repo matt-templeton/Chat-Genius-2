@@ -12,18 +12,34 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { useAppDispatch, useAppSelector } from "@/store";
-import { loginUser } from "@/store/slices/auth-slice";
+import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
 const formSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
+  displayName: z.string().min(2, "Display name must be at least 2 characters"),
 });
 
-export default function LoginPage() {
-  const dispatch = useAppDispatch();
-  const { loading, error } = useAppSelector((state) => state.auth);
+async function registerUser(userData: z.infer<typeof formSchema>) {
+  const response = await fetch('/api/v1/auth/register', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(userData),
+    credentials: 'include',
+  });
+
+  if (!response.ok) {
+    const errorData = await response.text();
+    throw new Error(errorData);
+  }
+
+  return response.json();
+}
+
+export default function SignupPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
@@ -32,27 +48,37 @@ export default function LoginPage() {
     defaultValues: {
       email: "",
       password: "",
+      displayName: "",
+    },
+  });
+
+  const mutation = useMutation({
+    mutationFn: registerUser,
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Account created successfully. Please log in.",
+      });
+      setLocation("/login");
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message,
+      });
     },
   });
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    try {
-      await dispatch(loginUser(values)).unwrap();
-      setLocation("/chat");
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error instanceof Error ? error.message : "Login failed",
-      });
-    }
+    mutation.mutate(values);
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="w-full max-w-md space-y-8 p-8">
         <div>
-          <h2 className="text-2xl font-bold text-center">Sign in to your account</h2>
+          <h2 className="text-2xl font-bold text-center">Create an account</h2>
         </div>
 
         <Form {...form}>
@@ -85,13 +111,27 @@ export default function LoginPage() {
               )}
             />
 
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Sign in"}
+            <FormField
+              control={form.control}
+              name="displayName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Display Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Enter your display name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <Button type="submit" className="w-full" disabled={mutation.isPending}>
+              {mutation.isPending ? "Creating account..." : "Sign up"}
             </Button>
 
             <div className="text-center">
-              <Button variant="link" onClick={() => setLocation("/signup")}>
-                Don't have an account? Sign up
+              <Button variant="link" onClick={() => setLocation("/login")}>
+                Already have an account? Sign in
               </Button>
             </div>
           </form>
