@@ -17,6 +17,7 @@ import {
   emojiRouter 
 } from './routes/index';
 import express from 'express';
+import { initializeWebSocketManager } from './websocket/WebSocketManager';
 
 const MemoryStoreSession = MemoryStore(session);
 
@@ -61,7 +62,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Workspace and workspace-specific channel routes
   app.use(`${apiPrefix}/workspaces`, workspaceRouter);
-  // Note: channelRouter handles both workspace-specific and global channel routes
   app.use(`${apiPrefix}/workspaces`, channelRouter); // For /workspaces/:workspaceId/channels endpoints
 
   // Global channel routes and channel-specific operations
@@ -81,6 +81,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Create HTTP server
   const httpServer = createServer(app);
+
+  // Initialize WebSocket manager after all routes are set up
+  initializeWebSocketManager(httpServer);
 
   return httpServer;
 }

@@ -5,6 +5,7 @@ import { eq, and } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
 import { z } from 'zod';
+import { getWebSocketManager } from '../websocket/WebSocketManager';
 
 const router = Router();
 
@@ -156,6 +157,9 @@ router.post('/', isAuthenticated, async (req: Request, res: Response) => {
       updatedAt: new Date()
     });
 
+    // Broadcast channel creation event
+    broadcastChannelEvent(channel, 'CHANNEL_CREATED');
+
     res.status(201).json(channel);
   } catch (error) {
     console.error('Error creating channel:', error);
@@ -244,6 +248,9 @@ router.put('/:channelId', isAuthenticated, async (req: Request, res: Response) =
       });
     }
 
+    // Broadcast channel update event
+    broadcastChannelEvent(channel, 'CHANNEL_UPDATED');
+
     res.json(channel);
   } catch (error) {
     console.error('Error updating channel:', error);
@@ -282,6 +289,9 @@ router.delete('/:channelId', isAuthenticated, async (req: Request, res: Response
         }
       });
     }
+
+    // Broadcast channel archive event
+    broadcastChannelEvent(channel, 'CHANNEL_ARCHIVED');
 
     res.status(204).send();
   } catch (error) {
@@ -440,5 +450,25 @@ router.delete('/:channelId/members', isAuthenticated, async (req: Request, res: 
     });
   }
 });
+
+function broadcastChannelEvent(channel: any, eventType: 'CHANNEL_CREATED' | 'CHANNEL_UPDATED' | 'CHANNEL_ARCHIVED') {
+  const wsManager = getWebSocketManager();
+  if (channel.workspaceId) {
+    wsManager.broadcastToWorkspace(channel.workspaceId, {
+      type: eventType,
+      workspaceId: channel.workspaceId,
+      channel: {
+        id: channel.channelId,
+        name: channel.name,
+        description: channel.topic ?? undefined,
+        isPrivate: channel.channelType === 'PRIVATE',
+        workspaceId: channel.workspaceId,
+        createdAt: channel.createdAt.toISOString(),
+        updatedAt: channel.updatedAt.toISOString(),
+        archived: channel.archived || false 
+      }
+    });
+  }
+}
 
 export { router as channelRouter };
