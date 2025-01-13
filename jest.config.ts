@@ -1,19 +1,30 @@
+
 import type { Config } from '@jest/types';
 
 const config: Config.InitialOptions = {
   preset: 'ts-jest',
   testEnvironment: 'node',
-  roots: ['<rootDir>/tests'],
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
+  transform: {
+    '^.+\\.tsx?$': ['ts-jest', {
+      useESM: true,
+      tsconfig: {
+        ...require('./tsconfig.json').compilerOptions,
+        module: 'CommonJS'
+      }
+    }]
+  },
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/client/src/$1',
     '^@db/(.*)$': '<rootDir>/db/$1',
-    '^@db': '<rootDir>/db/index.ts',
+    '^@db$': '<rootDir>/db/index.ts'
   },
-  testMatch: ['**/__tests__/**/*.ts?(x)', '**/?(*.)+(spec|test).ts?(x)'],
-  transform: {
-    '^.+\\.tsx?$': 'ts-jest'
-  }
+  extensionsToTreatAsEsm: ['.ts'],
+  globals: {
+    'ts-jest': {
+      useESM: true,
+    },
+  },
 };
 
 export default config;
