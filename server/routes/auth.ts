@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { hash, compare } from 'bcrypt';
 import { db } from "@db";
-import { users, workspaces, channels, userWorkspaces, userChannels } from "@db/schema";
+import { users } from "@db/schema";
 import { eq } from "drizzle-orm";
 import passport from '../middleware/auth';
 import type { Request, Response } from 'express';
@@ -39,7 +39,7 @@ function generateTokens(userId: number) {
 
 /**
  * @route POST /auth/register
- * @desc Register a new user with email verification and create default workspace
+ * @desc Register a new user with email verification
  */
 router.post('/register', async (req: Request, res: Response) => {
   try {
@@ -85,8 +85,8 @@ router.post('/register', async (req: Request, res: Response) => {
     // Hash password
     const passwordHash = await hash(password, 10);
 
-    // Create user and get the returned user object with ID
-    const [newUser] = await db.insert(users)
+    // Create user
+    const [user] = await db.insert(users)
       .values({
         email,
         passwordHash,
@@ -100,65 +100,10 @@ router.post('/register', async (req: Request, res: Response) => {
       })
       .returning();
 
-    if (!newUser || !newUser.userId) {
-      throw new Error('Failed to create user');
-    }
-
-    // Create default workspace for the user
-    const [newWorkspace] = await db.insert(workspaces)
-      .values({
-        name: `${displayName}'s Workspace`,
-        description: `Default workspace for ${displayName}`,
-        archived: false,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      })
-      .returning();
-
-    if (!newWorkspace || !newWorkspace.workspaceId) {
-      throw new Error('Failed to create workspace');
-    }
-
-    // Add user as workspace owner
-    await db.insert(userWorkspaces)
-      .values({
-        userId: newUser.userId,
-        workspaceId: newWorkspace.workspaceId,
-        role: 'OWNER',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-
-    // Create default general channel
-    const [newChannel] = await db.insert(channels)
-      .values({
-        workspaceId: newWorkspace.workspaceId,
-        name: 'general',
-        topic: 'General discussions',
-        channelType: 'PUBLIC',
-        archived: false,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      })
-      .returning();
-
-    if (!newChannel || !newChannel.channelId) {
-      throw new Error('Failed to create channel');
-    }
-
-    // Add user to the general channel
-    await db.insert(userChannels)
-      .values({
-        userId: newUser.userId,
-        channelId: newChannel.channelId,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-
     // Auto-verify for testing
     await db.update(users)
       .set({ emailVerified: true })
-      .where(eq(users.userId, newUser.userId));
+      .where(eq(users.userId, user.userId));
 
     res.status(201).json({
       message: "User created successfully"
