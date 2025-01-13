@@ -96,7 +96,7 @@
   {
     "name": "DirectMessagesList",
     "description": "Lists direct or multi-user DMs. Each item references a DM channel.",
-    "location": "Below or alongside the channel list in the sidebar.",
+    "location": "Below the channel list in the sidebar.",
     "typedPropsExample": {
       "interfaceName": "DirectMessagesListProps",
       "interfaceDefinition": "

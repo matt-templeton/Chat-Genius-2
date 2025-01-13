@@ -22,7 +22,7 @@ function ChatLayout({ children }: { children: React.ReactNode }) {
       <aside className="w-64 border-r border-border bg-background">
         <ChannelList />
       </aside>
-      <main className="flex-1 overflow-auto">
+      <main className="flex-1 overflow-hidden">
         {children}
       </main>
     </div>
@@ -48,7 +48,6 @@ function Router() {
       {/* Default route */}
       <Route path="/">
         {() => {
-          // Redirect to chat if logged in, otherwise to login
           window.location.href = '/login';
           return null;
         }}
