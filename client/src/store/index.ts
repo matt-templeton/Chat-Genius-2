@@ -1,21 +1,24 @@
 import { configureStore } from '@reduxjs/toolkit';
-import type { TypedUseSelectorHook } from 'react-redux';
-import { useDispatch, useSelector } from 'react-redux';
+import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
+import authReducer from './slices/auth-slice';
 
-// Create an empty initial store while we add features
 export const store = configureStore({
   reducer: {
-    // Reducers will be added as we implement features
+    auth: authReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
-      serializableCheck: false,
+      serializableCheck: {
+        // Ignore these action types
+        ignoredActions: ['persist/PERSIST'],
+      },
     }),
 });
 
-// Export types and hooks for use throughout the app
+// Infer the `RootState` and `AppDispatch` types from the store itself
 export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 
+// Export reusable typed versions of useDispatch and useSelector
 export const useAppDispatch: () => AppDispatch = useDispatch;
 export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;

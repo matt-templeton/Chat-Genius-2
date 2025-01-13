@@ -1,4 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAppDispatch } from '@/store';
+import { loginStart, loginSuccess, loginFailure, logout } from '@/store/slices/auth-slice';
 
 // Define the types based on OpenAPI spec
 export interface User {
@@ -10,59 +12,11 @@ export interface User {
 interface LoginCredentials {
   email: string;
   password: string;
-  displayName?: string;
 }
 
-interface AuthTokens {
-  accessToken: string;
-  refreshToken: string;
-}
-
-type RequestResult = {
-  ok: true;
-  data?: AuthTokens;
-} | {
-  ok: false;
+interface LoginResponse {
   message: string;
-};
-
-async function handleRequest(
-  url: string,
-  method: string,
-  body?: LoginCredentials
-): Promise<RequestResult> {
-  try {
-    const response = await fetch(`/auth${url}`, {
-      method,
-      headers: body ? { "Content-Type": "application/json" } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-      credentials: "include",
-    });
-
-    const contentType = response.headers.get("content-type");
-    const isJson = contentType && contentType.includes("application/json");
-
-    if (!response.ok) {
-      const errorMessage = isJson 
-        ? (await response.json()).message 
-        : await response.text();
-
-      if (response.status === 401) {
-        return { ok: false, message: "Invalid email or password" };
-      }
-
-      return { ok: false, message: errorMessage };
-    }
-
-    if (isJson) {
-      const data = await response.json();
-      return { ok: true, data };
-    }
-
-    return { ok: true };
-  } catch (e: any) {
-    return { ok: false, message: e.toString() };
-  }
+  user: User;
 }
 
 async function fetchUser(): Promise<User | null> {
@@ -74,11 +28,6 @@ async function fetchUser(): Promise<User | null> {
     if (response.status === 401) {
       return null;
     }
-
-    if (response.status >= 500) {
-      throw new Error(`${response.status}: ${response.statusText}`);
-    }
-
     throw new Error(`${response.status}: ${await response.text()}`);
   }
 
@@ -87,36 +36,67 @@ async function fetchUser(): Promise<User | null> {
 
 export function useUser() {
   const queryClient = useQueryClient();
+  const dispatch = useAppDispatch();
 
-  const { data: user, error, isLoading } = useQuery<User | null, Error>({
+  const { data: user, isLoading } = useQuery<User | null, Error>({
     queryKey: ['/auth/users/me'],
     queryFn: fetchUser,
     staleTime: Infinity,
     retry: false
   });
 
-  const loginMutation = useMutation<RequestResult, Error, LoginCredentials>({
-    mutationFn: (userData) => handleRequest('/login', 'POST', userData),
-    onSuccess: (result) => {
-      if (result.ok) {
-        queryClient.invalidateQueries({ queryKey: ['/auth/users/me'] });
+  const loginMutation = useMutation<LoginResponse, Error, LoginCredentials>({
+    mutationFn: async (credentials) => {
+      dispatch(loginStart());
+
+      const response = await fetch("/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(credentials),
+        credentials: "include",
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Login failed");
       }
+
+      return data;
     },
+    onSuccess: (data) => {
+      dispatch(loginSuccess(data.user));
+      queryClient.invalidateQueries({ queryKey: ['/auth/users/me'] });
+    },
+    onError: (error: Error) => {
+      dispatch(loginFailure(error.message));
+    }
   });
 
-  const logoutMutation = useMutation<RequestResult, Error>({
-    mutationFn: () => handleRequest('/logout', 'POST'),
-    onSuccess: (result) => {
-      if (result.ok) {
-        queryClient.invalidateQueries({ queryKey: ['/auth/users/me'] });
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Logout failed");
       }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      dispatch(logout());
+      queryClient.invalidateQueries({ queryKey: ['/auth/users/me'] });
     },
   });
 
   return {
     user,
     isLoading,
-    error,
     login: loginMutation.mutateAsync,
     logout: logoutMutation.mutateAsync,
   };
