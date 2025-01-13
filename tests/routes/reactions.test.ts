@@ -19,6 +19,7 @@ describe('Reaction Endpoints', () => {
   let testChannel: any;
   let testMessage: any;
   let testEmoji: any;
+  let testReaction: any;
   let accessToken: string;
   const testPassword = 'TestPassword123!';
 
@@ -115,6 +116,8 @@ describe('Reaction Endpoints', () => {
       expect(response.body).toHaveProperty('workspaceId', testMessage.workspaceId);
       expect(response.body).toHaveProperty('emojiId', testEmoji.emojiId);
       expect(response.body).toHaveProperty('userId', testUser.userId);
+
+      testReaction = response.body;
     });
 
     it('should prevent duplicate reactions from the same user', async () => {
@@ -165,20 +168,22 @@ describe('Reaction Endpoints', () => {
     });
   });
 
-  describe('DELETE /api/v1/messages/:messageId/reactions/:emojiId', () => {
+  describe('DELETE /api/v1/messages/:messageId/reactions/:reactionId', () => {
     beforeEach(async () => {
       // Add a reaction to delete
-      await request
+      const response = await request
         .post(`/api/v1/messages/${testMessage.messageId}/reactions`)
         .set('Authorization', `Bearer ${accessToken}`)
         .send({
           emojiId: testEmoji.emojiId
         });
+
+      testReaction = response.body;
     });
 
     it('should remove a reaction from a message', async () => {
       const response = await request
-        .delete(`/api/v1/messages/${testMessage.messageId}/reactions/${testEmoji.emojiId}`)
+        .delete(`/api/v1/messages/${testMessage.messageId}/reactions/${testReaction.reactionId}`)
         .set('Authorization', `Bearer ${accessToken}`);
 
       expect(response.status).toBe(204);
@@ -188,7 +193,7 @@ describe('Reaction Endpoints', () => {
         where: and(
           eq(messageReactions.messageId, testMessage.messageId),
           eq(messageReactions.workspaceId, testMessage.workspaceId),
-          eq(messageReactions.emojiId, testEmoji.emojiId),
+          eq(messageReactions.reactionId, testReaction.reactionId),
           eq(messageReactions.userId, testUser.userId)
         )
       });
@@ -197,23 +202,34 @@ describe('Reaction Endpoints', () => {
 
     it('should return 404 for non-existent message', async () => {
       const response = await request
-        .delete(`/api/v1/messages/99999/reactions/${testEmoji.emojiId}`)
+        .delete(`/api/v1/messages/99999/reactions/${testReaction.reactionId}`)
         .set('Authorization', `Bearer ${accessToken}`);
 
       expect(response.status).toBe(404);
       expect(response.body.details.code).toBe('MESSAGE_NOT_FOUND');
+    });
+
+    it('should return 404 for non-existent reaction', async () => {
+      const response = await request
+        .delete(`/api/v1/messages/${testMessage.messageId}/reactions/99999`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body.details.code).toBe('REACTION_NOT_FOUND');
     });
   });
 
   describe('GET /api/v1/messages/:messageId/reactions', () => {
     beforeEach(async () => {
       // Add a reaction to list
-      await request
+      const response = await request
         .post(`/api/v1/messages/${testMessage.messageId}/reactions`)
         .set('Authorization', `Bearer ${accessToken}`)
         .send({
           emojiId: testEmoji.emojiId
         });
+
+      testReaction = response.body;
     });
 
     it('should list all reactions for a message', async () => {
@@ -228,6 +244,7 @@ describe('Reaction Endpoints', () => {
       expect(response.body[0]).toHaveProperty('workspaceId', testMessage.workspaceId);
       expect(response.body[0]).toHaveProperty('emojiId', testEmoji.emojiId);
       expect(response.body[0]).toHaveProperty('userId', testUser.userId);
+      expect(response.body[0]).toHaveProperty('reactionId');
     });
 
     it('should return 404 for non-existent message', async () => {

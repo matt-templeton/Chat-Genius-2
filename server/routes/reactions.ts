@@ -14,10 +14,10 @@ const addReactionSchema = z.object({
 });
 
 /**
- * @route POST /messages/:messageId/reactions
+ * @route POST /api/v1/messages/:messageId/reactions
  * @desc Add a reaction to a message
  */
-router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: Response) => {
+router.post('/api/v1/:messageId/reactions', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { messageId } = req.params;
     const validationResult = addReactionSchema.safeParse(req.body);
@@ -100,17 +100,6 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
 
     res.status(201).json(reaction);
   } catch (error) {
-    // Check if error is a unique constraint violation
-    if (error instanceof Error && error.message.includes('idx_reactions_unique')) {
-      return res.status(409).json({
-        error: "Duplicate Reaction",
-        details: {
-          code: "DUPLICATE_REACTION",
-          message: "User has already reacted with this emoji"
-        }
-      });
-    }
-
     console.error('Error adding reaction:', error);
     res.status(500).json({
       error: "Internal Server Error",
@@ -123,14 +112,14 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
 });
 
 /**
- * @route DELETE /messages/:messageId/reactions/:emojiId
+ * @route DELETE /api/v1/messages/:messageId/reactions/:reactionId
  * @desc Remove a reaction from a message
  */
-router.delete('/:messageId/reactions/:emojiId', isAuthenticated, async (req: Request, res: Response) => {
+router.delete('/api/v1/:messageId/reactions/:reactionId', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { messageId, emojiId } = req.params;
+    const { messageId, reactionId } = req.params;
 
-    // First get the message to verify it exists and get its workspaceId
+    // First get the message to verify it exists
     const message = await db.query.messages.findFirst({
       where: eq(messages.messageId, parseInt(messageId))
     });
@@ -149,7 +138,7 @@ router.delete('/:messageId/reactions/:emojiId', isAuthenticated, async (req: Req
     const existingReaction = await db.query.messageReactions.findFirst({
       where: and(
         eq(messageReactions.messageId, parseInt(messageId)),
-        eq(messageReactions.emojiId, parseInt(emojiId)),
+        eq(messageReactions.reactionId, parseInt(reactionId)),
         eq(messageReactions.userId, req.user!.userId)
       )
     });
@@ -169,7 +158,7 @@ router.delete('/:messageId/reactions/:emojiId', isAuthenticated, async (req: Req
       .where(and(
         eq(messageReactions.messageId, parseInt(messageId)),
         eq(messageReactions.workspaceId, message.workspaceId),
-        eq(messageReactions.emojiId, parseInt(emojiId)),
+        eq(messageReactions.reactionId, parseInt(reactionId)),
         eq(messageReactions.userId, req.user!.userId)
       ));
 
@@ -187,14 +176,14 @@ router.delete('/:messageId/reactions/:emojiId', isAuthenticated, async (req: Req
 });
 
 /**
- * @route GET /messages/:messageId/reactions
+ * @route GET /api/v1/messages/:messageId/reactions
  * @desc Get all reactions for a message
  */
-router.get('/:messageId/reactions', isAuthenticated, async (req: Request, res: Response) => {
+router.get('/api/v1/:messageId/reactions', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { messageId } = req.params;
 
-    // First get the message to verify it exists and get its workspaceId
+    // First get the message to verify it exists
     const message = await db.query.messages.findFirst({
       where: eq(messages.messageId, parseInt(messageId))
     });
