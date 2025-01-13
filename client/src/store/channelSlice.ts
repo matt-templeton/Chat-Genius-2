@@ -57,15 +57,14 @@ export const createChannel = createAsyncThunk(
   async ({ workspaceId, channel }: { workspaceId: number, channel: Partial<Channel> }, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem('accessToken');
-      // Using the correct endpoint from OpenAPI spec: POST /channels
-      const response = await fetch('/api/v1/channels', {
+      // Using the correct endpoint from OpenAPI spec
+      const response = await fetch(`/api/v1/workspaces/${workspaceId}/channels`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          workspaceId,
           name: channel.name,
           description: channel.description || undefined,
           channelType: channel.channelType,
@@ -74,16 +73,23 @@ export const createChannel = createAsyncThunk(
 
       // Log the response for debugging
       console.log('Create channel response status:', response.status);
+      const responseText = await response.text();
+      console.log('Create channel response:', responseText);
 
-      // Check if response is not ok (not 201)
+      // Check for !response.ok instead of specific status codes
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Failed to create channel:', errorText);
-        return rejectWithValue(errorText || 'Failed to create channel');
+        console.error('Failed to create channel:', responseText);
+        return rejectWithValue(responseText || 'Failed to create channel');
       }
 
-      const data = await response.json();
-      console.log('Create channel response data:', data);
+      // Try to parse the response if it's not empty
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : null;
+      } catch (e) {
+        console.error('Failed to parse channel creation response:', e);
+        return rejectWithValue('Invalid response from server');
+      }
 
       if (!data) {
         console.error('No data returned from channel creation');

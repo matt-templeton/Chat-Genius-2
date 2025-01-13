@@ -55,12 +55,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(`${apiPrefix}/auth`, authRouter);
   app.use(`${apiPrefix}/users`, userRouter);
   app.use(`${apiPrefix}/workspaces`, workspaceRouter);
-
-  // Mount channel routes according to OpenAPI spec
-  // Workspace-specific channel routes (for listing channels in workspace)
-  app.use(`${apiPrefix}/workspaces`, channelRouter);
-  // Global channel routes (for creating/managing channels)
-  app.use(`${apiPrefix}/channels`, channelRouter);
+  app.use(`${apiPrefix}/workspaces`, channelRouter); // Mount workspace-related channel routes
+  app.use(`${apiPrefix}/channels`, channelRouter); // Mount channel-specific routes
 
   // Mount message-related routes
   app.use(`${apiPrefix}/channels`, messageRouter);
