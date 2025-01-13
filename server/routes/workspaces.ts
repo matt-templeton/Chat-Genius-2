@@ -21,19 +21,11 @@ const updateWorkspaceSchema = z.object({
 
 /**
  * @route GET /workspaces
- * @desc List all workspaces that authenticated user is a member of
+ * @desc List all workspaces
  */
-router.get('/', isAuthenticated, async (req: Request, res: Response) => {
+router.get('/', isAuthenticated, async (_req: Request, res: Response) => {
   try {
-    const userWorkspacesList = await db.query.userWorkspaces.findMany({
-      where: eq(userWorkspaces.userId, req.user!.userId),
-      with: {
-        workspace: true
-      }
-    });
-
-    // Map the results to only return workspace details
-    const workspacesList = userWorkspacesList.map(uw => uw.workspace);
+    const workspacesList = await db.query.workspaces.findMany();
     res.json(workspacesList);
   } catch (error) {
     console.error('Error fetching workspaces:', error);
