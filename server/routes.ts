@@ -17,21 +17,10 @@ import {
   emojiRouter 
 } from './routes/index';
 import express from 'express';
-import { WebSocket, WebSocketServer } from 'ws';
-import type { IncomingMessage } from 'http';
-import type { WebSocketMessage } from './types/websocket';
 
 const MemoryStoreSession = MemoryStore(session);
 
-// Track connected clients by workspace
-const clients = new Map<number, Set<WebSocket>>();
-
-// Extend Server type to include our custom broadcast function
-interface ExtendedServer extends Server {
-  broadcastToWorkspace(workspaceId: number, data: WebSocketMessage): void;
-}
-
-export async function registerRoutes(app: Express): Promise<ExtendedServer> {
+export async function registerRoutes(app: Express): Promise<Server> {
   // Create uploads directory if it doesn't exist
   const uploadsDir = path.join(process.cwd(), 'uploads');
   try {
@@ -72,86 +61,26 @@ export async function registerRoutes(app: Express): Promise<ExtendedServer> {
 
   // Workspace and workspace-specific channel routes
   app.use(`${apiPrefix}/workspaces`, workspaceRouter);
-  app.use(`${apiPrefix}/workspaces`, channelRouter);
+  // Note: channelRouter handles both workspace-specific and global channel routes
+  app.use(`${apiPrefix}/workspaces`, channelRouter); // For /workspaces/:workspaceId/channels endpoints
 
   // Global channel routes and channel-specific operations
   app.use(`${apiPrefix}/channels`, channelRouter);
 
   // Message routes - both channel-specific and message-specific operations
-  app.use(`${apiPrefix}/channels`, messageRouter);
-  app.use(`${apiPrefix}/messages`, messageRouter);
+  app.use(`${apiPrefix}/channels`, messageRouter); // For /channels/:channelId/messages endpoints
+  app.use(`${apiPrefix}/messages`, messageRouter); // For /messages/:messageId endpoints
 
   // Message-related features
-  app.use(`${apiPrefix}/messages`, reactionRouter);
-  app.use(`${apiPrefix}/messages`, pinRouter);
+  app.use(`${apiPrefix}/messages`, reactionRouter); // For /messages/:messageId/reactions
+  app.use(`${apiPrefix}/messages`, pinRouter); // For /messages/:messageId/pin
 
   // Standalone feature routes
   app.use(`${apiPrefix}/files`, fileRouter);
   app.use(`${apiPrefix}/emojis`, emojiRouter);
 
   // Create HTTP server
-  const httpServer = createServer(app) as ExtendedServer;
-
-  // Create WebSocket server
-  const wss = new WebSocketServer({ 
-    server: httpServer,
-    path: '/ws',
-    // Ignore vite HMR websocket connections
-    verifyClient: ({ req }: { req: IncomingMessage }) => {
-      return req.headers['sec-websocket-protocol'] !== 'vite-hmr';
-    }
-  });
-
-  // WebSocket connection handler
-  wss.on('connection', (ws: WebSocket) => {
-    ws.on('message', (message: string) => {
-      try {
-        const data = JSON.parse(message.toString()) as WebSocketMessage;
-
-        // Handle workspace subscription
-        if (data.type === 'subscribe' && data.workspaceId) {
-          const workspaceId = parseInt(data.workspaceId.toString());
-          if (!clients.has(workspaceId)) {
-            clients.set(workspaceId, new Set());
-          }
-          clients.get(workspaceId)?.add(ws);
-
-          // Send confirmation
-          ws.send(JSON.stringify({
-            type: 'subscribed',
-            workspaceId
-          }));
-        }
-      } catch (error) {
-        console.error('WebSocket message error:', error);
-      }
-    });
-
-    // Handle client disconnection
-    ws.on('close', () => {
-      // Remove client from all workspace subscriptions
-      // Convert Map.entries() to Array to avoid iteration issues
-      Array.from(clients.entries()).forEach(([workspaceId, workspaceClients]) => {
-        workspaceClients.delete(ws);
-        if (workspaceClients.size === 0) {
-          clients.delete(workspaceId);
-        }
-      });
-    });
-  });
-
-  // Add broadcast function to server
-  httpServer.broadcastToWorkspace = (workspaceId: number, data: WebSocketMessage) => {
-    const workspaceClients = clients.get(workspaceId);
-    if (workspaceClients) {
-      const message = JSON.stringify(data);
-      workspaceClients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(message);
-        }
-      });
-    }
-  };
+  const httpServer = createServer(app);
 
   return httpServer;
 }
