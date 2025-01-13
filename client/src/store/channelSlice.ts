@@ -31,7 +31,7 @@ export const fetchChannels = createAsyncThunk(
   async ({ workspaceId, showArchived }: { workspaceId: number; showArchived: boolean }, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/channels?include_archived=${showArchived}`, {
+      const response = await fetch(`/api/v1/workspaces/${workspaceId}/channels?includeArchived=${showArchived}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         }
@@ -43,7 +43,7 @@ export const fetchChannels = createAsyncThunk(
       }
 
       const data = await response.json();
-      return data.channels || [];
+      return data || [];
     } catch (error) {
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to fetch channels');
     }
@@ -62,8 +62,9 @@ export const createChannel = createAsyncThunk(
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
-          ...channel,
-          workspaceId,
+          name: channel.name,
+          description: channel.description || undefined,
+          channelType: channel.channelType,
         }),
       });
 
