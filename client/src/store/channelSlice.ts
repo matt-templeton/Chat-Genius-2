@@ -39,12 +39,14 @@ export const fetchChannels = createAsyncThunk(
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('Failed to fetch channels:', errorText);
         return rejectWithValue(errorText || 'Failed to fetch channels');
       }
 
       const data = await response.json();
       return data || [];
     } catch (error) {
+      console.error('Error fetching channels:', error);
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to fetch channels');
     }
   }
@@ -68,14 +70,33 @@ export const createChannel = createAsyncThunk(
         }),
       });
 
+      // Log the response for debugging
+      console.log('Create channel response status:', response.status);
+      const responseText = await response.text();
+      console.log('Create channel response:', responseText);
+
       if (!response.ok) {
-        const errorText = await response.text();
-        return rejectWithValue(errorText || 'Failed to create channel');
+        console.error('Failed to create channel:', responseText);
+        return rejectWithValue(responseText || 'Failed to create channel');
       }
 
-      const data = await response.json();
-      return data;
+      // Try to parse the response if it's not empty
+      let data;
+      try {
+        data = responseText ? JSON.parse(responseText) : null;
+      } catch (e) {
+        console.error('Failed to parse channel creation response:', e);
+        return rejectWithValue('Invalid response from server');
+      }
+
+      if (!data) {
+        console.error('No data returned from channel creation');
+        return rejectWithValue('No data returned from server');
+      }
+
+      return data as Channel;
     } catch (error) {
+      console.error('Error creating channel:', error);
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to create channel');
     }
   }
