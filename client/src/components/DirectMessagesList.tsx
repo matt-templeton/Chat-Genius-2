@@ -6,7 +6,7 @@ import { useAppDispatch, useAppSelector } from "@/store";
 import { setCurrentChannel } from "@/store/channelSlice";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, MessageSquare } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useState } from "react";
 import { Avatar } from "@/components/ui/avatar";
@@ -31,16 +31,12 @@ function DmEntry({
     <Button
       onClick={onClick}
       variant={isActive ? "secondary" : "ghost"}
-      className="w-full justify-start font-normal hover:bg-accent"
+      className="w-full justify-start font-normal"
     >
-      <div className="flex items-center space-x-2 w-full">
-        <Avatar className="h-6 w-6">
-          <AvatarFallback>{name[0].toUpperCase()}</AvatarFallback>
-        </Avatar>
-        <div className="flex flex-col items-start">
-          <span className="text-sm">{name}</span>
-        </div>
-      </div>
+      <Avatar className="h-6 w-6 mr-2">
+        <AvatarFallback>{name[0].toUpperCase()}</AvatarFallback>
+      </Avatar>
+      {name}
     </Button>
   );
 }
@@ -62,7 +58,7 @@ function NewDmButton({ onNewDm }: { onNewDm: (participantIds: number[]) => void 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="w-full justify-start">
+        <Button variant="ghost" className="w-full justify-start">
           <Plus className="h-4 w-4 mr-2" />
           Start New DM
         </Button>
@@ -122,15 +118,15 @@ export function DirectMessagesList() {
   }
 
   return (
-    <div className="flex flex-col">
-      <div className="px-3 mb-2">
+    <div className="space-y-4 py-4">
+      <div className="px-3 py-2">
         <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
           Direct Messages
         </h2>
         <NewDmButton onNewDm={handleNewDm} />
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="h-[300px]">
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <p className="text-sm text-muted-foreground">Loading messages...</p>

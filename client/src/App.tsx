@@ -17,24 +17,13 @@ import React from 'react';
 function ChatLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen">
-      {/* Workspace navigation sidebar */}
       <aside className="w-64 border-r border-border bg-background">
         <WorkspaceNavigation />
       </aside>
-
-      {/* Channels and DMs sidebar */}
       <aside className="w-64 border-r border-border bg-background flex flex-col">
-        <div className="flex-1 overflow-y-auto flex flex-col">
-          <div className="flex-shrink-0">
-            <ChannelList />
-          </div>
-          <div className="flex-1">
-            <DirectMessagesList />
-          </div>
-        </div>
+        <ChannelList />
+        <DirectMessagesList />
       </aside>
-
-      {/* Main content area */}
       <main className="flex-1 overflow-hidden">
         {children}
       </main>
