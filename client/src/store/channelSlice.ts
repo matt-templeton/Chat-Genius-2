@@ -57,7 +57,6 @@ export const createChannel = createAsyncThunk(
   async ({ workspaceId, channel }: { workspaceId: number, channel: Partial<Channel> }, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem('accessToken');
-      // Using the correct endpoint from OpenAPI spec
       const response = await fetch(`/api/v1/workspaces/${workspaceId}/channels`, {
         method: 'POST',
         headers: {
@@ -71,21 +70,15 @@ export const createChannel = createAsyncThunk(
         }),
       });
 
-      // Log the response for debugging
-      console.log('Create channel response status:', response.status);
-      const responseText = await response.text();
-      console.log('Create channel response:', responseText);
-
-      // Check for !response.ok instead of specific status codes
       if (!response.ok) {
-        console.error('Failed to create channel:', responseText);
-        return rejectWithValue(responseText || 'Failed to create channel');
+        const errorText = await response.text();
+        console.error('Failed to create channel:', errorText);
+        return rejectWithValue(errorText || 'Failed to create channel');
       }
 
-      // Try to parse the response if it's not empty
       let data;
       try {
-        data = responseText ? JSON.parse(responseText) : null;
+        data = await response.json();
       } catch (e) {
         console.error('Failed to parse channel creation response:', e);
         return rejectWithValue('Invalid response from server');
@@ -118,6 +111,46 @@ const channelSlice = createSlice({
       state.channels = [];
       state.currentChannel = null;
       state.error = null;
+    },
+    // New reducers for handling WebSocket events
+    handleChannelCreated: (state, action) => {
+      const channel = action.payload;
+      if (!state.channels.some(c => c.channelId === channel.id)) {
+        state.channels.push({
+          channelId: channel.id,
+          name: channel.name,
+          workspaceId: channel.workspaceId,
+          archived: channel.archived,
+          description: channel.description,
+          channelType: channel.isPrivate ? 'PRIVATE' : 'PUBLIC',
+          createdAt: channel.createdAt,
+        });
+      }
+    },
+    handleChannelUpdated: (state, action) => {
+      const channel = action.payload;
+      const index = state.channels.findIndex(c => c.channelId === channel.id);
+      if (index !== -1) {
+        state.channels[index] = {
+          ...state.channels[index],
+          name: channel.name,
+          archived: channel.archived,
+          description: channel.description,
+        };
+        if (state.currentChannel?.channelId === channel.id) {
+          state.currentChannel = state.channels[index];
+        }
+      }
+    },
+    handleChannelArchived: (state, action) => {
+      const channel = action.payload;
+      const index = state.channels.findIndex(c => c.channelId === channel.id);
+      if (index !== -1) {
+        state.channels[index].archived = true;
+        if (state.currentChannel?.channelId === channel.id) {
+          state.currentChannel = null;
+        }
+      }
     },
   },
   extraReducers: (builder) => {
@@ -152,5 +185,13 @@ const channelSlice = createSlice({
   },
 });
 
-export const { setCurrentChannel, toggleShowArchived, clearChannels } = channelSlice.actions;
+export const {
+  setCurrentChannel,
+  toggleShowArchived,
+  clearChannels,
+  handleChannelCreated,
+  handleChannelUpdated,
+  handleChannelArchived,
+} = channelSlice.actions;
+
 export default channelSlice.reducer;
