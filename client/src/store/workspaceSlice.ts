@@ -4,7 +4,6 @@ interface Workspace {
   id: number;
   name: string;
   archived: boolean;
-  // Add other fields as needed based on API response
 }
 
 interface WorkspaceState {
@@ -25,7 +24,7 @@ export const fetchWorkspaces = createAsyncThunk(
   'workspace/fetchWorkspaces',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await fetch('/api/workspaces', {
+      const response = await fetch('/api/v1/workspaces', {
         credentials: 'include',
       });
 
@@ -34,7 +33,9 @@ export const fetchWorkspaces = createAsyncThunk(
         return rejectWithValue(error);
       }
 
-      return response.json();
+      const data = await response.json();
+      // Filter out archived workspaces by default
+      return data.filter((workspace: Workspace) => !workspace.archived);
     } catch (error) {
       return rejectWithValue('Failed to fetch workspaces');
     }
@@ -45,7 +46,7 @@ export const createWorkspace = createAsyncThunk(
   'workspace/createWorkspace',
   async (workspace: { name: string }, { rejectWithValue }) => {
     try {
-      const response = await fetch('/api/workspaces', {
+      const response = await fetch('/api/v1/workspaces', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -72,6 +73,11 @@ const workspaceSlice = createSlice({
   reducers: {
     setCurrentWorkspace: (state, action) => {
       state.currentWorkspace = action.payload;
+    },
+    clearWorkspaces: (state) => {
+      state.workspaces = [];
+      state.currentWorkspace = null;
+      state.error = null;
     },
   },
   extraReducers: (builder) => {
@@ -105,5 +111,5 @@ const workspaceSlice = createSlice({
   },
 });
 
-export const { setCurrentWorkspace } = workspaceSlice.actions;
+export const { setCurrentWorkspace, clearWorkspaces } = workspaceSlice.actions;
 export default workspaceSlice.reducer;

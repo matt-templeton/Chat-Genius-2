@@ -28,8 +28,11 @@ function ChatLayout({ children }: { children: React.ReactNode }) {
 function Router() {
   return (
     <Switch>
+      {/* Public routes */}
       <Route path="/login" component={LoginPage} />
       <Route path="/signup" component={SignupPage} />
+
+      {/* Protected routes */}
       <Route path="/chat">
         {() => (
           <ChatLayout>
@@ -37,7 +40,18 @@ function Router() {
           </ChatLayout>
         )}
       </Route>
-      <Route path="/" component={LoginPage} />
+
+      {/* Default route */}
+      <Route path="/">
+        {() => {
+          // Redirect to chat if logged in, otherwise to login
+          // TODO: Add authentication check here
+          window.location.href = '/login';
+          return null;
+        }}
+      </Route>
+
+      {/* 404 fallback */}
       <Route component={NotFound} />
     </Switch>
   );

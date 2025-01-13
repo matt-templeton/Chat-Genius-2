@@ -11,7 +11,10 @@ export const store = configureStore({
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
-      serializableCheck: false,
+      serializableCheck: {
+        // Ignore these action types
+        ignoredActions: ['workspace/createWorkspace/rejected', 'workspace/fetchWorkspaces/rejected'],
+      },
     }),
 });
 
