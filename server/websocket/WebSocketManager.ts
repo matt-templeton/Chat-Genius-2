@@ -1,7 +1,7 @@
-import WebSocket, { WebSocketServer } from 'ws';
-import { Server } from 'http';
-import type { WebSocketClient, ChannelEvent } from './types';
-import { log } from '../utils/logger';
+import WebSocket, { WebSocketServer } from "ws";
+import { Server } from "http";
+import type { WebSocketClient, ChannelEvent } from "./types";
+import { log } from "../utils/logger";
 
 export class WebSocketManager {
   private wss: WebSocketServer;
@@ -11,21 +11,21 @@ export class WebSocketManager {
   private readonly CONNECTION_TIMEOUT = 5000; // 5 seconds
 
   constructor(server: Server) {
-    this.wss = new WebSocketServer({ 
+    this.wss = new WebSocketServer({
       server,
-      path: '/ws',
+      path: "/ws",
       verifyClient: (info: { origin: string; secure: boolean; req: any }) => {
-        const protocol = info.req.headers['sec-websocket-protocol'];
+        const protocol = info.req.headers["sec-websocket-protocol"];
 
         // Always allow Vite HMR connections
-        if (protocol === 'vite-hmr') {
-          log('Allowing Vite HMR connection');
+        if (protocol === "vite-hmr") {
+          log("Allowing Vite HMR connection");
           return true;
         }
 
         // For our application connections, verify workspaceId
         const url = new URL(info.req.url, `http://${info.req.headers.host}`);
-        const workspaceId = parseInt(url.searchParams.get('workspaceId') || '');
+        const workspaceId = parseInt(url.searchParams.get("workspaceId") || "");
 
         if (isNaN(workspaceId) || workspaceId <= 0) {
           log(`Rejected connection - invalid workspace ID: ${workspaceId}`);
@@ -34,18 +34,19 @@ export class WebSocketManager {
 
         log(`Accepted connection for workspace ID: ${workspaceId}`);
         return true;
-      }
+      },
     });
-
     this.setupWebSocketServer();
-    log('WebSocket server initialized');
+    log("WebSocket server initialized");
   }
 
   private setupWebSocketServer(): void {
-    this.wss.on('connection', this.handleConnection.bind(this));
+    this.wss.on("connection", this.handleConnection.bind(this));
 
-    this.wss.on('error', (error) => {
-      log(`WebSocket server error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    this.wss.on("error", (error) => {
+      log(
+        `WebSocket server error: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
     });
 
     // Add heartbeat to keep connections alive
@@ -60,16 +61,17 @@ export class WebSocketManager {
 
   private handleConnection(ws: WebSocket, request: any): void {
     try {
-      const ip = request.headers['x-forwarded-for'] || request.socket.remoteAddress;
+      const ip =
+        request.headers["x-forwarded-for"] || request.socket.remoteAddress;
       const currentConnections = this.connectionsByIp.get(ip) || 0;
 
       if (currentConnections >= this.MAX_CONNECTIONS_PER_IP) {
-        ws.close(1013, 'Too many connections');
+        ws.close(1013, "Too many connections");
         return;
       }
 
       this.connectionsByIp.set(ip, currentConnections + 1);
-      
+
       // Clear connection count after timeout
       setTimeout(() => {
         const count = this.connectionsByIp.get(ip);
@@ -79,17 +81,17 @@ export class WebSocketManager {
       }, this.CONNECTION_TIMEOUT);
 
       // Skip processing for Vite HMR connections
-      if (request.headers['sec-websocket-protocol'] === 'vite-hmr') {
-        log('Processing Vite HMR connection');
+      if (request.headers["sec-websocket-protocol"] === "vite-hmr") {
+        log("Processing Vite HMR connection");
         return;
       }
 
       const url = new URL(request.url, `http://${request.headers.host}`);
-      const workspaceId = parseInt(url.searchParams.get('workspaceId') || '');
+      const workspaceId = parseInt(url.searchParams.get("workspaceId") || "");
 
       if (isNaN(workspaceId) || workspaceId <= 0) {
         log(`Rejecting connection with invalid workspace ID: ${workspaceId}`);
-        ws.close(4000, 'Invalid workspace ID');
+        ws.close(4000, "Invalid workspace ID");
         return;
       }
 
@@ -97,36 +99,43 @@ export class WebSocketManager {
       log(`Client connected to workspace ${workspaceId}`);
 
       // Setup heartbeat response
-      ws.on('pong', () => {
+      ws.on("pong", () => {
         // Connection is alive
       });
 
-      ws.on('close', (code, reason) => {
+      ws.on("close", (code, reason) => {
         this.clients.delete(ws);
-        log(`Client disconnected from workspace ${workspaceId}. Code: ${code}, Reason: ${reason}`);
+        log(
+          `Client disconnected from workspace ${workspaceId}. Code: ${code}, Reason: ${reason}`,
+        );
       });
 
-      ws.on('error', (error) => {
-        log(`WebSocket error for workspace ${workspaceId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      ws.on("error", (error) => {
+        log(
+          `WebSocket error for workspace ${workspaceId}: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
         this.clients.delete(ws);
         try {
-          ws.close(1011, 'Internal server error');
+          ws.close(1011, "Internal server error");
         } catch (e) {
           // Ignore close errors
         }
       });
 
       // Send initial connection success message
-      ws.send(JSON.stringify({ 
-        type: 'CONNECTED', 
-        workspaceId,
-        timestamp: new Date().toISOString()
-      }));
-
+      ws.send(
+        JSON.stringify({
+          type: "CONNECTED",
+          workspaceId,
+          timestamp: new Date().toISOString(),
+        }),
+      );
     } catch (error) {
-      log(`Connection error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      log(
+        `Connection error: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
       try {
-        ws.close(4000, 'Invalid connection parameters');
+        ws.close(4000, "Invalid connection parameters");
       } catch (e) {
         // Ignore close errors
       }
@@ -135,29 +144,34 @@ export class WebSocketManager {
 
   public broadcastToWorkspace(workspaceId: number, event: ChannelEvent): void {
     if (!workspaceId) {
-      log('Invalid workspace ID for broadcast');
+      log("Invalid workspace ID for broadcast");
       return;
     }
 
     const message = JSON.stringify({
       ...event,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
 
     let successCount = 0;
     let failureCount = 0;
 
     this.clients.forEach((client, ws) => {
-      if (client.workspaceId === workspaceId && ws.readyState === WebSocket.OPEN) {
+      if (
+        client.workspaceId === workspaceId &&
+        ws.readyState === WebSocket.OPEN
+      ) {
         try {
           ws.send(message);
           successCount++;
         } catch (error) {
           failureCount++;
-          log(`Failed to send message to client: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          log(
+            `Failed to send message to client: ${error instanceof Error ? error.message : "Unknown error"}`,
+          );
           this.clients.delete(ws);
           try {
-            ws.close(1011, 'Failed to send message');
+            ws.close(1011, "Failed to send message");
           } catch (e) {
             // Ignore close errors
           }
@@ -165,7 +179,9 @@ export class WebSocketManager {
       }
     });
 
-    log(`Broadcast to workspace ${workspaceId}: ${successCount} successful, ${failureCount} failed`);
+    log(
+      `Broadcast to workspace ${workspaceId}: ${successCount} successful, ${failureCount} failed`,
+    );
   }
 }
 
@@ -181,7 +197,7 @@ export function initializeWebSocketManager(server: Server): WebSocketManager {
 
 export function getWebSocketManager(): WebSocketManager {
   if (!wsManager) {
-    throw new Error('WebSocket manager not initialized');
+    throw new Error("WebSocket manager not initialized");
   }
   return wsManager;
 }

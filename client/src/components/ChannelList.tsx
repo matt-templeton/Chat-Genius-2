@@ -1,17 +1,22 @@
-import { useEffect } from 'react';
-import { useAppDispatch, useAppSelector } from '@/store';
-import { 
-  fetchChannels, 
-  createChannel, 
-  setCurrentChannel, 
+import { useEffect } from "react";
+import { useAppDispatch, useAppSelector } from "@/store";
+import {
+  fetchChannels,
+  createChannel,
+  setCurrentChannel,
   toggleShowArchived,
   handleChannelCreated,
   handleChannelUpdated,
-  handleChannelArchived
-} from '@/store/channelSlice';
-import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+  handleChannelArchived,
+} from "@/store/channelSlice";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Form,
   FormControl,
@@ -20,7 +25,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Input } from '@/components/ui/input';
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -28,65 +33,72 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Archive, Loader2, Lock, Hash } from 'lucide-react';
-import { useState } from 'react';
-import { useToast } from '@/hooks/use-toast';
-import { Switch } from '@/components/ui/switch';
-import { useWebSocket } from '@/hooks/useWebSocket';
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Plus, Archive, Loader2, Lock, Hash } from "lucide-react";
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 const createChannelSchema = z.object({
-  name: z.string().min(1, 'Channel name is required').max(50, 'Name is too long'),
-  description: z.string().max(255, 'Description is too long').optional(),
-  channelType: z.enum(['PUBLIC', 'PRIVATE']),
+  name: z
+    .string()
+    .min(1, "Channel name is required")
+    .max(50, "Name is too long"),
+  description: z.string().max(255, "Description is too long").optional(),
+  channelType: z.enum(["PUBLIC", "PRIVATE"]),
 });
 
 type CreateChannelForm = z.infer<typeof createChannelSchema>;
 
 export function ChannelList() {
   const dispatch = useAppDispatch();
-  const { channels, currentChannel, loading, error, showArchived } = useAppSelector((state) => state.channel);
+  const { channels, currentChannel, loading, error, showArchived } =
+    useAppSelector((state) => state.channel);
   const { currentWorkspace } = useAppSelector((state) => state.workspace);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const { toast } = useToast();
 
   const handleChannelEvent = (event: any) => {
-    console.log('Received channel event:', event); 
+    console.log("Received channel event:", event);
 
     switch (event.type) {
-      case 'CHANNEL_CREATED':
-        console.log('Processing CHANNEL_CREATED event:', event.channel); 
-        dispatch(handleChannelCreated({
-          channelId: event.channel.id,
-          name: event.channel.name,
-          description: event.channel.description,
-          workspaceId: event.channel.workspaceId,
-          channelType: event.channel.isPrivate ? 'PRIVATE' : 'PUBLIC',
-          archived: event.channel.archived,
-          createdAt: event.channel.createdAt
-        }));
+      case "CHANNEL_CREATED":
+        console.log("Processing CHANNEL_CREATED event:", event.channel);
+        dispatch(
+          handleChannelCreated({
+            channelId: event.channel.id,
+            name: event.channel.name,
+            description: event.channel.description,
+            workspaceId: event.channel.workspaceId,
+            channelType: event.channel.isPrivate ? "PRIVATE" : "PUBLIC",
+            archived: event.channel.archived,
+            createdAt: event.channel.createdAt,
+          }),
+        );
         break;
-      case 'CHANNEL_UPDATED':
-        console.log('Processing CHANNEL_UPDATED event:', event.channel); 
-        dispatch(handleChannelUpdated({
-          channelId: event.channel.id,
-          name: event.channel.name,
-          description: event.channel.description,
-          workspaceId: event.channel.workspaceId,
-          channelType: event.channel.isPrivate ? 'PRIVATE' : 'PUBLIC',
-          archived: event.channel.archived,
-          createdAt: event.channel.createdAt
-        }));
+      case "CHANNEL_UPDATED":
+        console.log("Processing CHANNEL_UPDATED event:", event.channel);
+        dispatch(
+          handleChannelUpdated({
+            channelId: event.channel.id,
+            name: event.channel.name,
+            description: event.channel.description,
+            workspaceId: event.channel.workspaceId,
+            channelType: event.channel.isPrivate ? "PRIVATE" : "PUBLIC",
+            archived: event.channel.archived,
+            createdAt: event.channel.createdAt,
+          }),
+        );
         break;
-      case 'CHANNEL_ARCHIVED':
-        console.log('Processing CHANNEL_ARCHIVED event:', event.channel); 
+      case "CHANNEL_ARCHIVED":
+        console.log("Processing CHANNEL_ARCHIVED event:", event.channel);
         dispatch(handleChannelArchived(event.channel.id));
         break;
     }
   };
-
   // Initialize WebSocket connection
   useWebSocket({
     workspaceId: currentWorkspace?.workspaceId || 0,
@@ -96,9 +108,9 @@ export function ChannelList() {
   const form = useForm<CreateChannelForm>({
     resolver: zodResolver(createChannelSchema),
     defaultValues: {
-      name: '',
-      description: '',
-      channelType: 'PUBLIC',
+      name: "",
+      description: "",
+      channelType: "PUBLIC",
     },
   });
 
@@ -106,14 +118,19 @@ export function ChannelList() {
     if (currentWorkspace?.workspaceId) {
       const loadChannels = async () => {
         try {
-          await dispatch(fetchChannels({ 
-            workspaceId: currentWorkspace.workspaceId,
-            showArchived,
-          })).unwrap();
+          await dispatch(
+            fetchChannels({
+              workspaceId: currentWorkspace.workspaceId,
+              showArchived,
+            }),
+          ).unwrap();
         } catch (error) {
           toast({
             title: "Error",
-            description: error instanceof Error ? error.message : "Failed to load channels",
+            description:
+              error instanceof Error
+                ? error.message
+                : "Failed to load channels",
             variant: "destructive",
           });
         }
@@ -126,13 +143,15 @@ export function ChannelList() {
     if (!currentWorkspace?.workspaceId) return;
 
     try {
-      await dispatch(createChannel({
-        workspaceId: currentWorkspace.workspaceId,
-        channel: {
-          ...data,
-          archived: false,
-        }
-      })).unwrap();
+      await dispatch(
+        createChannel({
+          workspaceId: currentWorkspace.workspaceId,
+          channel: {
+            ...data,
+            archived: false,
+          },
+        }),
+      ).unwrap();
 
       setCreateDialogOpen(false);
       form.reset();
@@ -143,13 +162,14 @@ export function ChannelList() {
     } catch (err) {
       toast({
         title: "Error",
-        description: err instanceof Error ? err.message : "Failed to create channel",
+        description:
+          err instanceof Error ? err.message : "Failed to create channel",
         variant: "destructive",
       });
     }
   };
 
-  const handleSelectChannel = (channel: typeof channels[number]) => {
+  const handleSelectChannel = (channel: (typeof channels)[number]) => {
     dispatch(setCurrentChannel(channel));
   };
 
@@ -159,9 +179,9 @@ export function ChannelList() {
 
   const getChannelIcon = (channelType: string) => {
     switch (channelType) {
-      case 'PRIVATE':
+      case "PRIVATE":
         return <Lock className="h-4 w-4 mr-2" />;
-      case 'PUBLIC':
+      case "PUBLIC":
         return <Hash className="h-4 w-4 mr-2" />;
       default:
         return null;
@@ -171,7 +191,9 @@ export function ChannelList() {
   if (!currentWorkspace) {
     return (
       <div className="flex items-center justify-center h-full">
-        <p className="text-sm text-muted-foreground">Select a workspace to view channels</p>
+        <p className="text-sm text-muted-foreground">
+          Select a workspace to view channels
+        </p>
       </div>
     );
   }
@@ -179,7 +201,9 @@ export function ChannelList() {
   return (
     <div className="space-y-4 py-4">
       <div className="px-3 py-2">
-        <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Channels</h2>
+        <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">
+          Channels
+        </h2>
         <div className="flex items-center justify-between px-4 mb-2">
           <Button
             onClick={() => setCreateDialogOpen(true)}
@@ -212,13 +236,17 @@ export function ChannelList() {
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : error ? (
-          <div className="px-4 py-2 text-destructive">
-            {error}
-          </div>
+          <div className="px-4 py-2 text-destructive">{error}</div>
         ) : channels.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-            <p className="text-sm text-muted-foreground mb-4">No channels found</p>
-            <Button onClick={() => setCreateDialogOpen(true)} variant="outline" size="sm">
+            <p className="text-sm text-muted-foreground mb-4">
+              No channels found
+            </p>
+            <Button
+              onClick={() => setCreateDialogOpen(true)}
+              variant="outline"
+              size="sm"
+            >
               Create your first channel
             </Button>
           </div>
@@ -228,7 +256,11 @@ export function ChannelList() {
               <Button
                 key={`channel-${channel.channelId}`}
                 onClick={() => handleSelectChannel(channel)}
-                variant={currentChannel?.channelId === channel.channelId ? "secondary" : "ghost"}
+                variant={
+                  currentChannel?.channelId === channel.channelId
+                    ? "secondary"
+                    : "ghost"
+                }
                 className="w-full justify-start font-normal"
               >
                 <span className="flex items-center">
@@ -250,7 +282,10 @@ export function ChannelList() {
             <DialogTitle>Create Channel</DialogTitle>
           </DialogHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleCreateChannel)} className="space-y-4">
+            <form
+              onSubmit={form.handleSubmit(handleCreateChannel)}
+              className="space-y-4"
+            >
               <FormField
                 control={form.control}
                 name="name"
@@ -295,7 +330,10 @@ export function ChannelList() {
                   <FormItem>
                     <FormLabel>Description (Optional)</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter channel description" {...field} />
+                      <Input
+                        placeholder="Enter channel description"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -316,7 +354,7 @@ export function ChannelList() {
                       Creating...
                     </>
                   ) : (
-                    'Create'
+                    "Create"
                   )}
                 </Button>
               </div>

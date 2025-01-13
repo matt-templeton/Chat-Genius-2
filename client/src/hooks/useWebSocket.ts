@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -15,11 +14,19 @@ export function useWebSocket({
   const [isConnecting, setIsConnecting] = useState(false);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
+  const connections = useRef(0);
+
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const { toast } = useToast();
 
   const connect = useCallback(() => {
-    if (!workspaceId || workspaceId <= 0 || isConnecting || wsRef.current?.readyState === WebSocket.OPEN) {
+    if (
+      !workspaceId ||
+      workspaceId <= 0 ||
+      isConnecting ||
+      connections.current > 0 ||
+      wsRef.current?.readyState === WebSocket.OPEN
+    ) {
       return;
     }
 
@@ -36,16 +43,22 @@ export function useWebSocket({
         `${protocol}//${window.location.host}/ws?workspaceId=${workspaceId}`,
       );
 
+      console.log(reconnectAttempts.current);
       ws.onopen = () => {
         console.log("WebSocket connected to workspace:", workspaceId);
         setIsConnecting(false);
-        reconnectAttempts.current = 0;
+        connections.current = 1;
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (onChannelEvent && ["CHANNEL_CREATED", "CHANNEL_UPDATED", "CHANNEL_ARCHIVED"].includes(data.type)) {
+          if (
+            onChannelEvent &&
+            ["CHANNEL_CREATED", "CHANNEL_UPDATED", "CHANNEL_ARCHIVED"].includes(
+              data.type,
+            )
+          ) {
             onChannelEvent(data);
           }
         } catch (error) {
@@ -62,13 +75,16 @@ export function useWebSocket({
         wsRef.current = null;
 
         if (reconnectAttempts.current < maxReconnectAttempts) {
-          const backoffTime = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
+          const backoffTime = Math.min(
+            1000 * Math.pow(2, reconnectAttempts.current),
+            10000,
+          );
           reconnectAttempts.current++;
-          
+
           if (reconnectTimeoutRef.current) {
             clearTimeout(reconnectTimeoutRef.current);
           }
-          
+
           reconnectTimeoutRef.current = setTimeout(connect, backoffTime);
         }
       };
