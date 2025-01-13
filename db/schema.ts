@@ -57,8 +57,6 @@ export const workspaces = pgTable("Workspaces", {
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
   archived: boolean("archived").default(false),
-  ownerId: bigint("ownerId", { mode: "number" })
-    .references(() => users.userId, { onDelete: "set null" }),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
