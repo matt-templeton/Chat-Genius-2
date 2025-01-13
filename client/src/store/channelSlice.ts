@@ -57,20 +57,20 @@ export const createChannel = createAsyncThunk(
   async ({ workspaceId, channel }: { workspaceId: number, channel: Partial<Channel> }, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/channels`, {
+      const response = await fetch('/api/v1/channels', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({
+          workspaceId,
           name: channel.name,
-          description: channel.description || undefined,
+          description: channel.description || '',
           channelType: channel.channelType,
         }),
       });
 
-      // Log the response for debugging
       console.log('Create channel response status:', response.status);
       const responseText = await response.text();
       console.log('Create channel response:', responseText);
@@ -80,21 +80,12 @@ export const createChannel = createAsyncThunk(
         return rejectWithValue(responseText || 'Failed to create channel');
       }
 
-      // Try to parse the response if it's not empty
-      let data;
       try {
-        data = responseText ? JSON.parse(responseText) : null;
+        return JSON.parse(responseText) as Channel;
       } catch (e) {
-        console.error('Failed to parse channel creation response:', e);
+        console.error('Failed to parse channel response:', e);
         return rejectWithValue('Invalid response from server');
       }
-
-      if (!data) {
-        console.error('No data returned from channel creation');
-        return rejectWithValue('No data returned from server');
-      }
-
-      return data as Channel;
     } catch (error) {
       console.error('Error creating channel:', error);
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to create channel');

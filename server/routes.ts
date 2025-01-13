@@ -55,8 +55,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(`${apiPrefix}/auth`, authRouter);
   app.use(`${apiPrefix}/users`, userRouter);
   app.use(`${apiPrefix}/workspaces`, workspaceRouter);
-  app.use(`${apiPrefix}/workspaces`, channelRouter); // Mount workspace-related channel routes
-  app.use(`${apiPrefix}/channels`, channelRouter); // Mount channel-specific routes
+  app.use(apiPrefix + '/channels', channelRouter); // Mount channel router at the base API prefix
 
   // Mount message-related routes
   app.use(`${apiPrefix}/channels`, messageRouter);
