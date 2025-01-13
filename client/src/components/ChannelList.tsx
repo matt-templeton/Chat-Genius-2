@@ -2,9 +2,16 @@ import { useQuery } from "@tanstack/react-query";
 import { useAppSelector } from "@/store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Hash, Lock } from "lucide-react";
+import { Hash, Lock, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Channel {
   channelId: number;
@@ -18,8 +25,9 @@ interface Channel {
 }
 
 export function ChannelList() {
+  const [isExpanded, setIsExpanded] = useState(true);
   const currentWorkspace = useAppSelector(state => state.workspace.currentWorkspace);
-  
+
   const { data: channels = [], isLoading } = useQuery<Channel[]>({
     queryKey: [`/api/v1/workspaces/${currentWorkspace?.workspaceId}/channels`],
     enabled: !!currentWorkspace?.workspaceId,
@@ -48,10 +56,41 @@ export function ChannelList() {
   return (
     <ScrollArea className="h-[calc(100vh-9rem)]">
       <div className="space-y-1 p-3">
-        <div className="text-sm font-semibold text-foreground mb-2">
-          Channels
+        {/* Channel Header */}
+        <div className="flex items-center justify-between mb-2 px-2">
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-4 w-4 p-0 hover:bg-transparent"
+              onClick={() => setIsExpanded(!isExpanded)}
+            >
+              {isExpanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  className="h-auto p-0 font-semibold text-sm hover:bg-transparent"
+                >
+                  Channels
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuItem>Browse channels</DropdownMenuItem>
+                <DropdownMenuItem>Create channel</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-        {activeChannels.map((channel) => (
+
+        {/* Channel List */}
+        {isExpanded && activeChannels.map((channel) => (
           <Button
             key={channel.channelId}
             variant="ghost"
@@ -69,7 +108,7 @@ export function ChannelList() {
             <span className="truncate">{channel.name}</span>
           </Button>
         ))}
-        {activeChannels.length === 0 && (
+        {isExpanded && activeChannels.length === 0 && (
           <div className="px-2 py-1.5 text-sm text-muted-foreground">
             No channels found
           </div>
