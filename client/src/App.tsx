@@ -5,13 +5,15 @@ import { Toaster } from "@/components/ui/toaster";
 import NotFound from "@/pages/not-found";
 import { Provider } from "react-redux";
 import { store } from "./store";
+import LoginPage from "@/pages/login";
+import ChatPage from "@/pages/chat";
 
 function Router() {
   return (
     <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
-      {/* Fallback to 404 */}
+      <Route path="/login" component={LoginPage} />
+      <Route path="/chat" component={ChatPage} />
+      <Route path="/" component={LoginPage} />
       <Route component={NotFound} />
     </Switch>
   );
