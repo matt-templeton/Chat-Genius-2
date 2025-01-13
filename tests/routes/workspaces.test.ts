@@ -105,6 +105,125 @@ describe('Workspace Endpoints', () => {
     }
   });
 
+  describe('GET /api/v1/workspaces', () => {
+    let testWorkspace1: any;
+    let testWorkspace2: any;
+
+    beforeEach(async () => {
+      // Create test workspaces
+      const [workspace1] = await db.insert(workspaces)
+        .values({
+          name: 'Test Workspace 1',
+          description: 'First test workspace',
+          archived: false,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+      testWorkspace1 = workspace1;
+
+      const [workspace2] = await db.insert(workspaces)
+        .values({
+          name: 'Test Workspace 2',
+          description: 'Second test workspace',
+          archived: false,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+      testWorkspace2 = workspace2;
+
+      // Add admin to first workspace
+      await db.insert(userWorkspaces)
+        .values({
+          userId: testAdmin.userId,
+          workspaceId: workspace1.workspaceId,
+          role: 'OWNER',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+
+      // Add user to second workspace
+      await db.insert(userWorkspaces)
+        .values({
+          userId: testUser.userId,
+          workspaceId: workspace2.workspaceId,
+          role: 'MEMBER',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+    });
+
+    it('should only list workspaces where user is a member', async () => {
+      const response = await request
+        .get('/api/v1/workspaces')
+        .set('Authorization', `Bearer ${userAccessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBe(1);
+      expect(response.body[0].workspaceId).toBe(testWorkspace2.workspaceId);
+    });
+
+    it('should return empty array when user has no workspaces', async () => {
+      // Create a new user with no workspace memberships
+      const timestamp = new Date().getTime();
+      const [newUser] = await db.insert(users)
+        .values({
+          email: `no.workspace.${timestamp}@example.com`,
+          passwordHash: await bcrypt.hash(testPassword, 10),
+          displayName: 'No Workspace User',
+          emailVerified: true,
+          deactivated: false,
+          lastKnownPresence: 'ONLINE',
+          lastLogin: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      const loginResponse = await request
+        .post('/api/v1/auth/login')
+        .send({
+          email: newUser.email,
+          password: testPassword
+        });
+
+      const newUserToken = loginResponse.body.accessToken;
+
+      const response = await request
+        .get('/api/v1/workspaces')
+        .set('Authorization', `Bearer ${newUserToken}`);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBe(0);
+    });
+
+    it('should return 401 without authentication', async () => {
+      const response = await request.get('/api/v1/workspaces');
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('UNAUTHORIZED');
+    });
+
+    afterEach(async () => {
+      if (testWorkspace1?.workspaceId) {
+        await db.delete(userWorkspaces)
+          .where(eq(userWorkspaces.workspaceId, testWorkspace1.workspaceId));
+        await db.delete(workspaces)
+          .where(eq(workspaces.workspaceId, testWorkspace1.workspaceId));
+      }
+      if (testWorkspace2?.workspaceId) {
+        await db.delete(userWorkspaces)
+          .where(eq(userWorkspaces.workspaceId, testWorkspace2.workspaceId));
+        await db.delete(workspaces)
+          .where(eq(workspaces.workspaceId, testWorkspace2.workspaceId));
+      }
+    });
+  });
+
   describe('POST /api/v1/workspaces', () => {
     it('should create a new workspace and set creator as owner', async () => {
       const response = await request
@@ -159,26 +278,6 @@ describe('Workspace Endpoints', () => {
           name: 'Test Workspace',
           description: 'A test workspace'
         });
-
-      expect(response.status).toBe(401);
-      expect(response.body).toHaveProperty('error');
-      expect(response.body.details.code).toBe('UNAUTHORIZED');
-    });
-  });
-
-  describe('GET /api/v1/workspaces', () => {
-    it('should list all workspaces', async () => {
-      const response = await request
-        .get('/api/v1/workspaces')
-        .set('Authorization', `Bearer ${adminAccessToken}`);
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
-    });
-
-    it('should return 401 without authentication', async () => {
-      const response = await request.get('/api/v1/workspaces');
 
       expect(response.status).toBe(401);
       expect(response.body).toHaveProperty('error');
