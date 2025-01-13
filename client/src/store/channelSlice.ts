@@ -6,6 +6,7 @@ export interface Channel {
   workspaceId: number;
   archived: boolean;
   description?: string;
+  topic?: string;
   channelType: 'PUBLIC' | 'PRIVATE' | 'DM';
   createdAt: string;
 }
@@ -54,7 +55,10 @@ export const fetchChannels = createAsyncThunk(
 
 export const createChannel = createAsyncThunk(
   'channel/createChannel',
-  async ({ workspaceId, channel }: { workspaceId: number, channel: Partial<Channel> }, { rejectWithValue }) => {
+  async ({ workspaceId, channel }: { 
+    workspaceId: number, 
+    channel: Pick<Channel, 'name' | 'channelType' | 'topic'> 
+  }, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem('accessToken');
       const response = await fetch('/api/v1/channels', {
@@ -63,10 +67,11 @@ export const createChannel = createAsyncThunk(
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           name: channel.name,
-          workspaceId: workspaceId,
-          description: channel.description || undefined,
+          workspaceId,
+          topic: channel.topic,
           channelType: channel.channelType,
         }),
       });
@@ -91,6 +96,7 @@ export const createChannel = createAsyncThunk(
   }
 );
 
+// WebSocket event actions
 export const handleChannelCreated = createAction<Channel>('channel/handleChannelCreated');
 export const handleChannelUpdated = createAction<Channel>('channel/handleChannelUpdated');
 export const handleChannelArchived = createAction<number>('channel/handleChannelArchived');
@@ -111,12 +117,11 @@ const channelSlice = createSlice({
       state.error = null;
     },
     handleChannelCreated: (state, action) => {
-      // Only add the channel if it doesn't already exist
       const channel = action.payload;
       const channelExists = state.channels.some(c => c.channelId === channel.channelId);
       if (!channelExists) {
         state.channels.push(channel);
-        // If this is the newly created channel, set it as current
+        // Set as current if it matches
         if (state.currentChannel?.channelId === channel.channelId) {
           state.currentChannel = channel;
         }
@@ -164,7 +169,6 @@ const channelSlice = createSlice({
       })
       .addCase(createChannel.fulfilled, (state, action) => {
         state.loading = false;
-        //state.currentChannel = action.payload; //Removed - handled in handleChannelCreated
         state.error = null;
       })
       .addCase(createChannel.rejected, (state, action) => {

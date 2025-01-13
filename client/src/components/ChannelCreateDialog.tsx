@@ -9,6 +9,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { useAppDispatch } from "@/store";
+import { createChannel } from "@/store/channelSlice";
 
 const channelSchema = z.object({
   name: z.string().min(1, "Channel name is required"),
@@ -33,6 +35,7 @@ export function ChannelCreateDialog({
 }: ChannelCreateDialogProps) {
   const [isCreating, setIsCreating] = useState(false);
   const { toast } = useToast();
+  const dispatch = useAppDispatch();
 
   const form = useForm<FormData>({
     resolver: zodResolver(channelSchema),
@@ -46,21 +49,14 @@ export function ChannelCreateDialog({
   const onSubmit = async (data: FormData) => {
     try {
       setIsCreating(true);
-      const response = await fetch("/api/v1/channels", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...data,
-          workspaceId,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
+      const result = await dispatch(createChannel({ 
+        workspaceId, 
+        channel: {
+          name: data.name,
+          channelType: data.channelType,
+          topic: data.topic,
+        }
+      })).unwrap();
 
       toast({
         title: "Channel created",

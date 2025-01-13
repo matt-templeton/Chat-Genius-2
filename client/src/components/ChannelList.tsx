@@ -1,11 +1,10 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAppSelector } from "@/store";
+import { useAppSelector, useAppDispatch } from "@/store";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Hash, Lock, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { ChannelCreateDialog } from "./ChannelCreateDialog";
 import {
@@ -14,40 +13,53 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-interface Channel {
-  channelId: number;
-  name: string;
-  topic: string | null;
-  workspaceId: number;
-  channelType: 'PUBLIC' | 'PRIVATE' | 'DM';
-  archived: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+import { 
+  handleChannelCreated, 
+  handleChannelUpdated, 
+  handleChannelArchived,
+  fetchChannels 
+} from "@/store/channelSlice";
 
 export function ChannelList() {
   const [isExpanded, setIsExpanded] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const dispatch = useAppDispatch();
+
   const currentWorkspace = useAppSelector(state => state.workspace.currentWorkspace);
-  const queryClient = useQueryClient();
+  const { channels, loading } = useAppSelector(state => state.channel);
 
-  const channelsQueryKey = currentWorkspace?.workspaceId ? 
-    `/api/v1/workspaces/${currentWorkspace.workspaceId}/channels` : 
-    null;
-
-  const { data: channels = [], isLoading } = useQuery<Channel[]>({
-    queryKey: [channelsQueryKey],
-    enabled: !!channelsQueryKey,
-  });
+  // Fetch channels when workspace changes
+  useEffect(() => {
+    if (currentWorkspace?.workspaceId) {
+      dispatch(fetchChannels({ 
+        workspaceId: currentWorkspace.workspaceId, 
+        showArchived: false 
+      }));
+    }
+  }, [currentWorkspace?.workspaceId, dispatch]);
 
   // Setup WebSocket connection for real-time updates
   useWebSocket({
     workspaceId: currentWorkspace?.workspaceId || 0,
     onChannelEvent: (event) => {
-      if (event.type === 'CHANNEL_CREATED' && event.workspaceId === currentWorkspace?.workspaceId) {
-        // Invalidate the channels query to trigger a refresh
-        queryClient.invalidateQueries({ queryKey: [channelsQueryKey] });
+      if (!currentWorkspace) return;
+
+      switch (event.type) {
+        case 'CHANNEL_CREATED':
+          if (event.workspaceId === currentWorkspace.workspaceId) {
+            dispatch(handleChannelCreated(event.channel));
+          }
+          break;
+        case 'CHANNEL_UPDATED':
+          if (event.workspaceId === currentWorkspace.workspaceId) {
+            dispatch(handleChannelUpdated(event.channel));
+          }
+          break;
+        case 'CHANNEL_ARCHIVED':
+          if (event.workspaceId === currentWorkspace.workspaceId) {
+            dispatch(handleChannelArchived(event.channel.id));
+          }
+          break;
       }
     },
   });
@@ -60,7 +72,7 @@ export function ChannelList() {
     );
   }
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="space-y-2 p-3">
         <Skeleton className="h-4 w-[70%]" />
