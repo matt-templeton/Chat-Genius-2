@@ -8,7 +8,7 @@ import { isAuthenticated } from '../middleware/auth';
 const router = Router();
 
 /**
- * @route GET /v1/users
+ * @route GET /users
  * @desc List all users with optional deactivated filter
  */
 router.get('/', isAuthenticated, async (req: Request, res: Response) => {
@@ -29,14 +29,15 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
     res.status(500).json({
       error: "Internal Server Error",
       details: {
-        code: "SERVER_ERROR"
+        code: "SERVER_ERROR",
+        message: "Failed to fetch users"
       }
     });
   }
 });
 
 /**
- * @route GET /v1/users/me
+ * @route GET /users/me
  * @desc Get current authenticated user
  */
 router.get('/me', isAuthenticated, async (req: Request, res: Response) => {
@@ -45,7 +46,8 @@ router.get('/me', isAuthenticated, async (req: Request, res: Response) => {
       return res.status(401).json({
         error: "Unauthorized",
         details: {
-          code: "UNAUTHORIZED"
+          code: "UNAUTHORIZED",
+          message: "Not authenticated"
         }
       });
     }
@@ -58,7 +60,8 @@ router.get('/me', isAuthenticated, async (req: Request, res: Response) => {
       return res.status(404).json({
         error: "User Not Found",
         details: {
-          code: "USER_NOT_FOUND"
+          code: "USER_NOT_FOUND",
+          message: "Current user not found"
         }
       });
     }
@@ -69,14 +72,15 @@ router.get('/me', isAuthenticated, async (req: Request, res: Response) => {
     res.status(500).json({
       error: "Internal Server Error",
       details: {
-        code: "SERVER_ERROR"
+        code: "SERVER_ERROR",
+        message: "Failed to fetch current user"
       }
     });
   }
 });
 
 /**
- * @route GET /v1/users/:userId
+ * @route GET /users/:userId
  * @desc Get a specific user by ID
  */
 router.get('/:userId', isAuthenticated, async (req: Request, res: Response) => {
@@ -90,7 +94,8 @@ router.get('/:userId', isAuthenticated, async (req: Request, res: Response) => {
       return res.status(404).json({
         error: "User Not Found",
         details: {
-          code: "USER_NOT_FOUND"
+          code: "USER_NOT_FOUND",
+          message: "Requested user not found"
         }
       });
     }
@@ -101,14 +106,15 @@ router.get('/:userId', isAuthenticated, async (req: Request, res: Response) => {
     res.status(500).json({
       error: "Internal Server Error",
       details: {
-        code: "SERVER_ERROR"
+        code: "SERVER_ERROR",
+        message: "Failed to fetch user"
       }
     });
   }
 });
 
 /**
- * @route POST /v1/users/:userId/reactivate
+ * @route POST /users/:userId/reactivate
  * @desc Reactivate a previously deactivated user
  */
 router.post('/:userId/reactivate', isAuthenticated, async (req: Request, res: Response) => {
@@ -127,7 +133,8 @@ router.post('/:userId/reactivate', isAuthenticated, async (req: Request, res: Re
       return res.status(404).json({
         error: "User Not Found",
         details: {
-          code: "USER_NOT_FOUND"
+          code: "USER_NOT_FOUND",
+          message: "The requested user does not exist"
         }
       });
     }
@@ -138,7 +145,8 @@ router.post('/:userId/reactivate', isAuthenticated, async (req: Request, res: Re
     res.status(500).json({
       error: "Internal Server Error",
       details: {
-        code: "SERVER_ERROR"
+        code: "SERVER_ERROR",
+        message: "Failed to reactivate user"
       }
     });
   }
