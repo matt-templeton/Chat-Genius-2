@@ -1,11 +1,15 @@
 import { configureStore } from '@reduxjs/toolkit';
 import type { TypedUseSelectorHook } from 'react-redux';
 import { useDispatch, useSelector } from 'react-redux';
-import authReducer from './auth-slice';
+import authReducer from './slices/auth-slice';
+import channelReducer from './channelSlice';
+import workspaceReducer from './workspaceSlice';
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
+    channel: channelReducer,
+    workspace: workspaceReducer,
   },
 });
 
