@@ -1,0 +1,16 @@
+eceived channel event: {type: 'CHANNEL_CREATED', workspaceId: 1, channel: {…}, timestamp: '2025-01-13T16:10:28.729Z'}
+ChannelList.tsx:60 Processing CHANNEL_CREATED event: {id: 6, name: 'agasdfasdf', isPrivate: false, workspaceId: 1, createdAt: '2025-01-13T16:10:28.612Z', …}
+ChannelList.tsx:56 Received channel event: {type: 'CHANNEL_CREATED', workspaceId: 1, channel: {…}, timestamp: '2025-01-13T16:10:28.729Z'}
+ChannelList.tsx:60 Processing CHANNEL_CREATED event: {id: 6, name: 'agasdfasdf', isPrivate: false, workspaceId: 1, createdAt: '2025-01-13T16:10:28.612Z', …}
+ChannelList.tsx:56 Received channel event: {type: 'CHANNEL_CREATED', workspaceId: 1, channel: {…}, timestamp: '2025-01-13T16:10:28.729Z'}
+ChannelList.tsx:60 Processing CHANNEL_CREATED event: {id: 6, name: 'agasdfasdf', isPrivate: false, workspaceId: 1, createdAt: '2025-01-13T16:10:28.612Z', …}
+ChannelList.tsx:56 Received channel event: {type: 'CHANNEL_CREATED', workspaceId: 1, channel: {…}, timestamp: '2025-01-13T16:10:28.729Z'}
+ChannelList.tsx:60 Processing CHANNEL_CREATED event: {id: 6, name: 'agasdfasdf', isPrivate: false, workspaceId: 1, createdAt: '2025-01-13T16:10:28.612Z', …}
+ChannelList.tsx:56 Received channel event: {type: 'CHANNEL_CREATED', workspaceId: 1, channel: {…}, timestamp: '2025-01-13T16:10:28.729Z'}
+ChannelList.tsx:60 Processing CHANNEL_CREATED event: {id: 6, name: 'agasdfasdf', isPrivate: false, workspaceId: 1, createdAt: '2025-01-13T16:10:28.612Z', …}
+ChannelList.tsx:56 Received channel event: {type: 'CHANNEL_CREATED', workspaceId: 1, channel: {…}, timestamp: '2025-01-13T16:10:28.729Z'}
+ChannelList.tsx:60 Processing CHANNEL_CREATED event: {id: 6, name: 'agasdfasdf', isPrivate: false, workspaceId: 1, createdAt: '2025-01-13T16:10:28.612Z', …}
+ChannelList.tsx:56 Received channel event: {type: 'CHANNEL_CREATED', workspaceId: 1, channel: {…}, timestamp: '2025-01-13T16:10:28.729Z'}
+ChannelList.tsx:60 Processing CHANNEL_CREATED event: {id: 6, name: 'agasdfasdf', isPrivate: false, workspaceId: 1, createdAt: '2025-01-13T16:10:28.612Z', …}
+ChannelList.tsx:56 Received channel event: {type: 'CHANNEL_CREATED', workspaceId: 1, channel: {…}, timestamp: '2025-01-13T16:10:28.729Z'}
+ChannelList.tsx:60 Processing CHANNEL_CREATED event: {id: 6, name: 'agasdfasdf', isPrivate: false, workspaceId: 1, createdAt: '2025-01-13T16:10:28.612Z', …}

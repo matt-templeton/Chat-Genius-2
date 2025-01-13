@@ -8,7 +8,6 @@ export class WebSocketManager {
   private clients: Map<WebSocket, WebSocketClient> = new Map();
   private connectionsByIp: Map<string, number> = new Map();
   private readonly MAX_CONNECTIONS_PER_IP = 3;
-  private readonly CONNECTION_TIMEOUT = 5000; // 5 seconds
 
   constructor(server: Server) {
     this.wss = new WebSocketServer({ 
@@ -48,7 +47,7 @@ export class WebSocketManager {
       log(`WebSocket server error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     });
 
-    // Add heartbeat to keep connections alive
+    // Add heartbeat to keep connections alive and clean up stale ones
     setInterval(() => {
       this.wss.clients.forEach((ws) => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -69,14 +68,6 @@ export class WebSocketManager {
       }
 
       this.connectionsByIp.set(ip, currentConnections + 1);
-      
-      // Clear connection count after timeout
-      setTimeout(() => {
-        const count = this.connectionsByIp.get(ip);
-        if (count && count > 0) {
-          this.connectionsByIp.set(ip, count - 1);
-        }
-      }, this.CONNECTION_TIMEOUT);
 
       // Skip processing for Vite HMR connections
       if (request.headers['sec-websocket-protocol'] === 'vite-hmr') {
@@ -93,6 +84,16 @@ export class WebSocketManager {
         return;
       }
 
+      // Close any existing connections for this workspace/user combination
+      Array.from(this.clients.entries()).forEach(([existingWs, client]) => {
+        if (client.workspaceId === workspaceId && client.userId === 1) {
+          log(`Closing existing connection for workspace ${workspaceId} and user ${client.userId}`);
+          existingWs.close(1000, 'New connection established');
+          this.clients.delete(existingWs);
+        }
+      });
+
+      // Add the new connection
       this.clients.set(ws, { workspaceId, userId: 1, ws });
       log(`Client connected to workspace ${workspaceId}`);
 
@@ -103,6 +104,10 @@ export class WebSocketManager {
 
       ws.on('close', (code, reason) => {
         this.clients.delete(ws);
+        const ipConnections = this.connectionsByIp.get(ip);
+        if (ipConnections && ipConnections > 0) {
+          this.connectionsByIp.set(ip, ipConnections - 1);
+        }
         log(`Client disconnected from workspace ${workspaceId}. Code: ${code}, Reason: ${reason}`);
       });
 
