@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,12 @@ import { Plus, Menu, Loader2 } from 'lucide-react';
 import { fetchWorkspaces, createWorkspace, setCurrentWorkspace } from '@/store/workspaceSlice';
 import type { RootState } from '@/store';
 import { useAppDispatch } from '@/store';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Form } from '@/components/ui/form';
+import { Input } from '@/components/ui/input';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
 
 interface Workspace {
   id: number;
@@ -14,19 +20,35 @@ interface Workspace {
   archived: boolean;
 }
 
+const createWorkspaceSchema = z.object({
+  name: z.string().min(1, 'Workspace name is required').max(50, 'Name is too long'),
+});
+
+type CreateWorkspaceForm = z.infer<typeof createWorkspaceSchema>;
+
 export function WorkspaceNavigation() {
   const dispatch = useAppDispatch();
   const { workspaces, currentWorkspace, loading, error } = useSelector(
     (state: RootState) => state.workspace
   );
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+
+  const form = useForm<CreateWorkspaceForm>({
+    resolver: zodResolver(createWorkspaceSchema),
+    defaultValues: {
+      name: '',
+    },
+  });
 
   useEffect(() => {
     dispatch(fetchWorkspaces());
   }, [dispatch]);
 
-  const handleCreateWorkspace = async () => {
+  const handleCreateWorkspace = async (data: CreateWorkspaceForm) => {
     try {
-      await dispatch(createWorkspace({ name: 'New Workspace' })).unwrap();
+      await dispatch(createWorkspace(data)).unwrap();
+      setCreateDialogOpen(false);
+      form.reset();
     } catch (err) {
       console.error('Failed to create workspace:', err);
     }
@@ -57,7 +79,7 @@ export function WorkspaceNavigation() {
       return (
         <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
           <p className="text-sm text-muted-foreground mb-4">No workspaces found</p>
-          <Button onClick={handleCreateWorkspace} variant="outline" size="sm">
+          <Button onClick={() => setCreateDialogOpen(true)} variant="outline" size="sm">
             Create your first workspace
           </Button>
         </div>
@@ -88,7 +110,7 @@ export function WorkspaceNavigation() {
       <div className="px-3 py-2">
         <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Workspaces</h2>
         <Button
-          onClick={handleCreateWorkspace}
+          onClick={() => setCreateDialogOpen(true)}
           className="w-full justify-start"
           variant="ghost"
           disabled={loading}
@@ -121,6 +143,52 @@ export function WorkspaceNavigation() {
       <div className="hidden md:block h-full">
         <NavigationContent />
       </div>
+
+      {/* Create Workspace Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Workspace</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={form.handleSubmit(handleCreateWorkspace)} className="space-y-4">
+            <div>
+              <label htmlFor="name" className="text-sm font-medium">
+                Workspace Name
+              </label>
+              <Input
+                id="name"
+                {...form.register('name')}
+                placeholder="Enter workspace name"
+                className="mt-1"
+              />
+              {form.formState.errors.name && (
+                <p className="text-sm text-red-500 mt-1">
+                  {form.formState.errors.name.message}
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setCreateDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  'Create'
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -29,6 +29,11 @@ export const fetchWorkspaces = createAsyncThunk(
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          // Handle unauthorized access
+          window.location.href = '/login';
+          return rejectWithValue('Please log in to access workspaces');
+        }
         const error = await response.text();
         return rejectWithValue(error);
       }
@@ -56,6 +61,11 @@ export const createWorkspace = createAsyncThunk(
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          // Handle unauthorized access
+          window.location.href = '/login';
+          return rejectWithValue('Please log in to create workspaces');
+        }
         const error = await response.text();
         return rejectWithValue(error);
       }
@@ -102,6 +112,7 @@ const workspaceSlice = createSlice({
       .addCase(createWorkspace.fulfilled, (state, action) => {
         state.loading = false;
         state.workspaces.push(action.payload);
+        state.currentWorkspace = action.payload;
         state.error = null;
       })
       .addCase(createWorkspace.rejected, (state, action) => {
