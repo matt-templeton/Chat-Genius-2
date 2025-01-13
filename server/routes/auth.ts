@@ -1,28 +1,31 @@
-import { Router } from 'express';
-import { hash, compare } from 'bcrypt';
+import { Router } from "express";
+import { hash, compare } from "bcrypt";
 import { db } from "@db";
 import { users, workspaces, channels } from "@db/schema";
 import { eq } from "drizzle-orm";
-import passport from '../middleware/auth';
-import type { Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
-import { isAuthenticated } from '../middleware/auth';
+import passport from "../middleware/auth";
+import type { Request, Response } from "express";
+import jwt from "jsonwebtoken";
+import { isAuthenticated } from "../middleware/auth";
 
 const router = Router();
 
 // JWT Configuration
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key';
-const ACCESS_TOKEN_EXPIRY = '15m';
-const REFRESH_TOKEN_EXPIRY = '7d';
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+const JWT_REFRESH_SECRET =
+  process.env.JWT_REFRESH_SECRET || "your-refresh-secret-key";
+const ACCESS_TOKEN_EXPIRY = "15m";
+const REFRESH_TOKEN_EXPIRY = "7d";
 
 // Password validation
 const isStrongPassword = (password: string): boolean => {
-  return password.length >= 8 && // Minimum length
+  return (
+    password.length >= 8 && // Minimum length
     /[A-Z]/.test(password) && // Has uppercase
     /[a-z]/.test(password) && // Has lowercase
     /[0-9]/.test(password) && // Has number
-    /[^A-Za-z0-9]/.test(password); // Has special char
+    /[^A-Za-z0-9]/.test(password)
+  ); // Has special char
 };
 
 // Email validation
@@ -32,8 +35,12 @@ const isValidEmail = (email: string): boolean => {
 
 // Helper function to generate tokens
 function generateTokens(userId: number) {
-  const accessToken = jwt.sign({ userId }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
-  const refreshToken = jwt.sign({ userId }, JWT_REFRESH_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRY });
+  const accessToken = jwt.sign({ userId }, JWT_SECRET, {
+    expiresIn: ACCESS_TOKEN_EXPIRY,
+  });
+  const refreshToken = jwt.sign({ userId }, JWT_REFRESH_SECRET, {
+    expiresIn: REFRESH_TOKEN_EXPIRY,
+  });
   return { accessToken, refreshToken };
 }
 
@@ -41,7 +48,7 @@ function generateTokens(userId: number) {
  * @route POST /auth/register
  * @desc Register a new user with email verification
  */
-router.post('/register', async (req: Request, res: Response) => {
+router.post("/register", async (req: Request, res: Response) => {
   try {
     const { email, password, displayName } = req.body;
 
@@ -51,8 +58,8 @@ router.post('/register', async (req: Request, res: Response) => {
         error: "Invalid Email",
         details: {
           code: "INVALID_EMAIL",
-          message: "Please provide a valid email address"
-        }
+          message: "Please provide a valid email address",
+        },
       });
     }
 
@@ -62,14 +69,15 @@ router.post('/register', async (req: Request, res: Response) => {
         error: "Weak Password",
         details: {
           code: "WEAK_PASSWORD",
-          message: "Password must be at least 8 characters and include uppercase, lowercase, number, and special character"
-        }
+          message:
+            "Password must be at least 8 characters and include uppercase, lowercase, number, and special character",
+        },
       });
     }
 
     // Check if user already exists
     const existingUser = await db.query.users.findFirst({
-      where: eq(users.email, email)
+      where: eq(users.email, email),
     });
 
     if (existingUser) {
@@ -77,8 +85,8 @@ router.post('/register', async (req: Request, res: Response) => {
         error: "Email in Use",
         details: {
           code: "EMAIL_IN_USE",
-          message: "Email already registered"
-        }
+          message: "Email already registered",
+        },
       });
     }
 
@@ -86,18 +94,20 @@ router.post('/register', async (req: Request, res: Response) => {
     const passwordHash = await hash(password, 10);
 
     // Create default workspace first
-    const [workspace] = await db.insert(workspaces)
+    const [workspace] = await db
+      .insert(workspaces)
       .values({
         name: `${displayName}'s Workspace`,
-        description: 'Default workspace',
+        description: "Default workspace",
         archived: false,
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .returning();
 
     // Create user with default workspace
-    const [user] = await db.insert(users)
+    const [user] = await db
+      .insert(users)
       .values({
         email,
         passwordHash,
@@ -105,47 +115,40 @@ router.post('/register', async (req: Request, res: Response) => {
         defaultWorkspace: workspace.workspaceId,
         emailVerified: false,
         deactivated: false,
-        lastKnownPresence: 'ONLINE',
+        lastKnownPresence: "ONLINE",
         lastLogin: new Date(),
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .returning();
 
-    // Update workspace with user ID after user creation
-    await db.update(workspaces)
-      .set({ userId: user.userId })
-      .where(eq(workspaces.workspaceId, workspace.workspaceId));
-
     // Create default general channel
-    await db.insert(channels)
-      .values({
-        name: 'general',
-        workspaceId: workspace.workspaceId,
-        isPrivate: false,
-        archived: false,
-        description: 'Default channel',
-        channelType: 'PUBLIC',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
+    await db.insert(channels).values({
+      name: "general",
+      workspaceId: workspace.workspaceId,
+      archived: false,
+      channelType: "PUBLIC",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     // Auto-verify for testing
-    await db.update(users)
+    await db
+      .update(users)
       .set({ emailVerified: true })
       .where(eq(users.userId, user.userId));
 
     res.status(201).json({
-      message: "User created successfully"
+      message: "User created successfully",
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error("Registration error:", error);
     res.status(500).json({
       error: "Internal Server Error",
       details: {
         code: "SERVER_ERROR",
-        message: "An unexpected error occurred"
-      }
+        message: "An unexpected error occurred",
+      },
     });
   }
 });
@@ -154,13 +157,13 @@ router.post('/register', async (req: Request, res: Response) => {
  * @route POST /auth/login
  * @desc Authenticate user and return tokens
  */
-router.post('/login', async (req: Request, res: Response) => {
+router.post("/login", async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
     // Find user
     const user = await db.query.users.findFirst({
-      where: eq(users.email, email)
+      where: eq(users.email, email),
     });
 
     if (!user || !user.passwordHash) {
@@ -168,8 +171,8 @@ router.post('/login', async (req: Request, res: Response) => {
         error: "Authentication Failed",
         details: {
           code: "INVALID_CREDENTIALS",
-          message: "Invalid email or password"
-        }
+          message: "Invalid email or password",
+        },
       });
     }
 
@@ -180,8 +183,8 @@ router.post('/login', async (req: Request, res: Response) => {
         error: "Authentication Failed",
         details: {
           code: "INVALID_CREDENTIALS",
-          message: "Invalid email or password"
-        }
+          message: "Invalid email or password",
+        },
       });
     }
 
@@ -189,19 +192,20 @@ router.post('/login', async (req: Request, res: Response) => {
     const tokens = generateTokens(user.userId);
 
     // Update last login
-    await db.update(users)
+    await db
+      .update(users)
       .set({ lastLogin: new Date() })
       .where(eq(users.userId, user.userId));
 
     res.json(tokens);
   } catch (error) {
-    console.error('Login error:', error);
+    console.error("Login error:", error);
     res.status(500).json({
       error: "Internal Server Error",
       details: {
         code: "SERVER_ERROR",
-        message: "An unexpected error occurred"
-      }
+        message: "An unexpected error occurred",
+      },
     });
   }
 });
@@ -210,7 +214,7 @@ router.post('/login', async (req: Request, res: Response) => {
  * @route POST /auth/refresh
  * @desc Refresh access token using refresh token
  */
-router.post('/refresh', async (req: Request, res: Response) => {
+router.post("/refresh", async (req: Request, res: Response) => {
   try {
     const { refreshToken } = req.body;
 
@@ -219,14 +223,16 @@ router.post('/refresh', async (req: Request, res: Response) => {
         error: "Invalid Token",
         details: {
           code: "INVALID_TOKEN",
-          message: "Refresh token is required"
-        }
+          message: "Refresh token is required",
+        },
       });
     }
 
     try {
       // Verify refresh token
-      const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as { userId: number };
+      const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as {
+        userId: number;
+      };
 
       // Generate new tokens
       const tokens = generateTokens(decoded.userId);
@@ -237,18 +243,18 @@ router.post('/refresh', async (req: Request, res: Response) => {
         error: "Invalid Token",
         details: {
           code: "INVALID_TOKEN",
-          message: "Invalid or expired refresh token"
-        }
+          message: "Invalid or expired refresh token",
+        },
       });
     }
   } catch (error) {
-    console.error('Token refresh error:', error);
+    console.error("Token refresh error:", error);
     res.status(500).json({
       error: "Internal Server Error",
       details: {
         code: "SERVER_ERROR",
-        message: "An unexpected error occurred"
-      }
+        message: "An unexpected error occurred",
+      },
     });
   }
 });
@@ -257,15 +263,15 @@ router.post('/refresh', async (req: Request, res: Response) => {
  * @route POST /auth/logout
  * @desc Logout user and invalidate tokens
  */
-router.post('/logout', isAuthenticated, (req: Request, res: Response) => {
+router.post("/logout", isAuthenticated, (req: Request, res: Response) => {
   req.logout((err) => {
     if (err) {
       return res.status(500).json({
         error: "Logout Error",
         details: {
           code: "LOGOUT_ERROR",
-          message: "An error occurred during logout"
-        }
+          message: "An error occurred during logout",
+        },
       });
     }
     res.status(200).json({ message: "Logout successful" });
@@ -276,14 +282,14 @@ router.post('/logout', isAuthenticated, (req: Request, res: Response) => {
  * @route POST /auth/verify-email
  * @desc Verify user's email address
  */
-router.post('/verify-email', async (req: Request, res: Response) => {
+router.post("/verify-email", async (req: Request, res: Response) => {
   try {
     const { token } = req.body;
 
     // For testing, we'll accept a mock token
-    if (token === 'test-verification-token') {
+    if (token === "test-verification-token") {
       return res.status(200).json({
-        message: "Email verified successfully"
+        message: "Email verified successfully",
       });
     }
 
@@ -291,16 +297,16 @@ router.post('/verify-email', async (req: Request, res: Response) => {
       error: "Invalid Token",
       details: {
         code: "INVALID_TOKEN",
-        message: "The verification token is invalid or has expired"
-      }
+        message: "The verification token is invalid or has expired",
+      },
     });
   } catch (error) {
     res.status(500).json({
       error: "Internal Server Error",
       details: {
         code: "SERVER_ERROR",
-        message: "An unexpected error occurred"
-      }
+        message: "An unexpected error occurred",
+      },
     });
   }
 });
