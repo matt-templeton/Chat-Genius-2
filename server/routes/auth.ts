@@ -38,7 +38,7 @@ function generateTokens(userId: number) {
 }
 
 /**
- * @route POST /auth/register
+ * @route POST /api/v1/auth/register
  * @desc Register a new user with email verification
  */
 router.post('/register', async (req: Request, res: Response) => {
@@ -50,8 +50,7 @@ router.post('/register', async (req: Request, res: Response) => {
       return res.status(400).json({
         error: "Invalid Email",
         details: {
-          code: "INVALID_EMAIL",
-          message: "Please provide a valid email address"
+          code: "INVALID_EMAIL"
         }
       });
     }
@@ -61,8 +60,7 @@ router.post('/register', async (req: Request, res: Response) => {
       return res.status(400).json({
         error: "Weak Password",
         details: {
-          code: "WEAK_PASSWORD",
-          message: "Password must be at least 8 characters and include uppercase, lowercase, number, and special character"
+          code: "WEAK_PASSWORD"
         }
       });
     }
@@ -76,8 +74,7 @@ router.post('/register', async (req: Request, res: Response) => {
       return res.status(409).json({
         error: "Email in Use",
         details: {
-          code: "EMAIL_IN_USE",
-          message: "Email already registered"
+          code: "EMAIL_IN_USE"
         }
       });
     }
@@ -100,11 +97,6 @@ router.post('/register', async (req: Request, res: Response) => {
       })
       .returning();
 
-    // Auto-verify for testing
-    await db.update(users)
-      .set({ emailVerified: true })
-      .where(eq(users.userId, user.userId));
-
     res.status(201).json({
       message: "User created successfully"
     });
@@ -113,15 +105,14 @@ router.post('/register', async (req: Request, res: Response) => {
     res.status(500).json({
       error: "Internal Server Error",
       details: {
-        code: "SERVER_ERROR",
-        message: "An unexpected error occurred"
+        code: "SERVER_ERROR"
       }
     });
   }
 });
 
 /**
- * @route POST /auth/login
+ * @route POST /api/v1/auth/login
  * @desc Authenticate user and return tokens
  */
 router.post('/login', async (req: Request, res: Response) => {
@@ -137,8 +128,7 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({
         error: "Authentication Failed",
         details: {
-          code: "INVALID_CREDENTIALS",
-          message: "Invalid email or password"
+          code: "INVALID_CREDENTIALS"
         }
       });
     }
@@ -149,102 +139,33 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({
         error: "Authentication Failed",
         details: {
-          code: "INVALID_CREDENTIALS",
-          message: "Invalid email or password"
+          code: "INVALID_CREDENTIALS"
         }
       });
     }
-
-    // Generate tokens
-    const tokens = generateTokens(user.userId);
 
     // Update last login
     await db.update(users)
       .set({ lastLogin: new Date() })
       .where(eq(users.userId, user.userId));
 
+    // Generate tokens
+    const tokens = generateTokens(user.userId);
     res.json(tokens);
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({
       error: "Internal Server Error",
       details: {
-        code: "SERVER_ERROR",
-        message: "An unexpected error occurred"
+        code: "SERVER_ERROR"
       }
     });
   }
 });
 
 /**
- * @route POST /auth/refresh
- * @desc Refresh access token using refresh token
- */
-router.post('/refresh', async (req: Request, res: Response) => {
-  try {
-    const { refreshToken } = req.body;
-
-    if (!refreshToken) {
-      return res.status(401).json({
-        error: "Invalid Token",
-        details: {
-          code: "INVALID_TOKEN",
-          message: "Refresh token is required"
-        }
-      });
-    }
-
-    try {
-      // Verify refresh token
-      const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as { userId: number };
-
-      // Generate new tokens
-      const tokens = generateTokens(decoded.userId);
-
-      res.json(tokens);
-    } catch (error) {
-      return res.status(401).json({
-        error: "Invalid Token",
-        details: {
-          code: "INVALID_TOKEN",
-          message: "Invalid or expired refresh token"
-        }
-      });
-    }
-  } catch (error) {
-    console.error('Token refresh error:', error);
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: {
-        code: "SERVER_ERROR",
-        message: "An unexpected error occurred"
-      }
-    });
-  }
-});
-
-/**
- * @route POST /auth/logout
- * @desc Logout user and invalidate tokens
- */
-router.post('/logout', isAuthenticated, (req: Request, res: Response) => {
-  req.logout((err) => {
-    if (err) {
-      return res.status(500).json({
-        error: "Logout Error",
-        details: {
-          code: "LOGOUT_ERROR",
-          message: "An error occurred during logout"
-        }
-      });
-    }
-    res.status(200).json({ message: "Logout successful" });
-  });
-});
-
-/**
- * @route POST /auth/verify-email
- * @desc Verify user's email address
+ * @route POST /api/v1/auth/verify-email
+ * @desc Verify user email
  */
 router.post('/verify-email', async (req: Request, res: Response) => {
   try {
@@ -260,19 +181,68 @@ router.post('/verify-email', async (req: Request, res: Response) => {
     return res.status(400).json({
       error: "Invalid Token",
       details: {
-        code: "INVALID_TOKEN",
-        message: "The verification token is invalid or has expired"
+        code: "INVALID_TOKEN"
       }
     });
   } catch (error) {
     res.status(500).json({
       error: "Internal Server Error",
       details: {
-        code: "SERVER_ERROR",
-        message: "An unexpected error occurred"
+        code: "SERVER_ERROR"
       }
     });
   }
+});
+
+/**
+ * @route POST /api/v1/auth/refresh
+ * @desc Refresh access token using refresh token
+ */
+router.post('/refresh', async (req: Request, res: Response) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(401).json({
+        error: "Invalid Token",
+        details: {
+          code: "INVALID_TOKEN"
+        }
+      });
+    }
+
+    try {
+      // Verify refresh token
+      const decoded = jwt.verify(refreshToken, JWT_REFRESH_SECRET) as { userId: number };
+
+      // Generate new tokens
+      const tokens = generateTokens(decoded.userId);
+      res.json(tokens);
+    } catch (error) {
+      return res.status(401).json({
+        error: "Invalid Token",
+        details: {
+          code: "INVALID_TOKEN"
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: {
+        code: "SERVER_ERROR"
+      }
+    });
+  }
+});
+
+/**
+ * @route POST /api/v1/auth/logout
+ * @desc Logout user and invalidate tokens
+ */
+router.post('/logout', isAuthenticated, (_req: Request, res: Response) => {
+  res.status(200).json({ message: "Logout successful" });
 });
 
 export { router as authRouter };

@@ -50,23 +50,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  // Mount all routes under /api/v1 prefix
-  const apiPrefix = '/api/v1';
+  // Mount all routes under /v1 prefix as per OpenAPI spec
+  const apiPrefix = '/v1';
+
+  // Auth routes
   app.use(`${apiPrefix}/auth`, authRouter);
+
+  // User routes
   app.use(`${apiPrefix}/users`, userRouter);
+
+  // Workspace and channel routes
   app.use(`${apiPrefix}/workspaces`, workspaceRouter);
-  app.use(`${apiPrefix}/workspaces`, channelRouter); // Mount workspace-related channel routes
-  app.use(`${apiPrefix}/channels`, channelRouter); // Mount channel-specific routes
+  app.use(`${apiPrefix}/workspaces`, channelRouter); // Workspace-related channel routes
+  app.use(`${apiPrefix}/channels`, channelRouter); // Channel-specific routes
 
-  // Mount message-related routes
-  app.use(`${apiPrefix}/channels`, messageRouter);
-  app.use(`${apiPrefix}/messages`, messageRouter);
+  // Message-related routes
+  app.use(`${apiPrefix}/channels`, messageRouter); // Channel messages
+  app.use(`${apiPrefix}/messages`, messageRouter); // Message-specific operations
 
-  // Mount reactions and pins under /messages since they're message-related
+  // Message reactions and pins
   app.use(`${apiPrefix}/messages`, reactionRouter);
   app.use(`${apiPrefix}/messages`, pinRouter);
 
-  // Mount file and emoji routes
+  // File and emoji routes
   app.use(`${apiPrefix}/files`, fileRouter);
   app.use(`${apiPrefix}/emojis`, emojiRouter);
 
