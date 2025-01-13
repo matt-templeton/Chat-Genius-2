@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -13,16 +14,19 @@ export function useWebSocket({
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 3;
-  const minReconnectDelay = 2000;
-  const maxReconnectDelay = 10000;
+  const maxReconnectAttempts = 5;
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const { toast } = useToast();
 
   const connect = useCallback(() => {
-    if (!workspaceId || workspaceId <= 0 || isConnecting || 
-        reconnectAttempts.current >= maxReconnectAttempts ||
-        wsRef.current?.readyState === WebSocket.OPEN) {
+    if (!workspaceId || workspaceId <= 0 || isConnecting || wsRef.current?.readyState === WebSocket.OPEN) {
       return;
+    }
+
+    // Clean up existing connection first
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
 
     try {
@@ -36,10 +40,6 @@ export function useWebSocket({
         console.log("WebSocket connected to workspace:", workspaceId);
         setIsConnecting(false);
         reconnectAttempts.current = 0;
-        toast({
-          title: "Connected",
-          description: `Connected to workspace ${workspaceId}`,
-        });
       };
 
       ws.onmessage = (event) => {
@@ -55,43 +55,40 @@ export function useWebSocket({
 
       ws.onerror = () => {
         setIsConnecting(false);
-        reconnectAttempts.current++;
-
-        if (reconnectAttempts.current >= maxReconnectAttempts) {
-          toast({
-            title: "Connection Error",
-            description: "Failed to connect to workspace. Please refresh the page.",
-            variant: "destructive",
-          });
-        }
       };
 
-      ws.onclose = (event) => {
+      ws.onclose = () => {
         setIsConnecting(false);
         wsRef.current = null;
 
-        if (event.code !== 1000 && event.code !== 1001 && reconnectAttempts.current < maxReconnectAttempts) {
-          const timeout = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
-          setTimeout(connect, timeout);
+        if (reconnectAttempts.current < maxReconnectAttempts) {
+          const backoffTime = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
+          reconnectAttempts.current++;
+          
+          if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+          }
+          
+          reconnectTimeoutRef.current = setTimeout(connect, backoffTime);
         }
       };
 
       wsRef.current = ws;
     } catch (error) {
       setIsConnecting(false);
-      toast({
-        title: "Connection Error",
-        description: "Failed to establish connection.",
-        variant: "destructive",
-      });
+      console.error("WebSocket connection error:", error);
     }
-  }, [workspaceId, onChannelEvent, toast, isConnecting]);
+  }, [workspaceId, onChannelEvent]);
 
   useEffect(() => {
-    const connectTimeout = setTimeout(connect, 1000);
+    connect();
+
     return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
       if (wsRef.current) {
-        wsRef.current.close(1000, "Component unmounted");
+        wsRef.current.close();
         wsRef.current = null;
       }
       setIsConnecting(false);
