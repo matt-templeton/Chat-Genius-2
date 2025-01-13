@@ -57,6 +57,7 @@ export const createChannel = createAsyncThunk(
   async ({ workspaceId, channel }: { workspaceId: number, channel: Partial<Channel> }, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem('accessToken');
+      // Using the correct endpoint from OpenAPI spec
       const response = await fetch(`/api/v1/workspaces/${workspaceId}/channels`, {
         method: 'POST',
         headers: {
@@ -75,6 +76,7 @@ export const createChannel = createAsyncThunk(
       const responseText = await response.text();
       console.log('Create channel response:', responseText);
 
+      // Check for !response.ok instead of specific status codes
       if (!response.ok) {
         console.error('Failed to create channel:', responseText);
         return rejectWithValue(responseText || 'Failed to create channel');
