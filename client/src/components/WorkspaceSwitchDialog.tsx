@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import {
   Dialog,
   DialogContent,
@@ -18,8 +17,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Check, PlusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useAppSelector } from "@/store";
-import { selectWorkspace } from "@/store/workspaceSlice";
+import { useAppSelector, useAppDispatch } from "@/store";
+import { setCurrentWorkspace } from "@/store/workspaceSlice";
 
 interface WorkspaceSwitchDialogProps {
   isOpen: boolean;
@@ -41,7 +40,7 @@ export function WorkspaceSwitchDialog({
   onOpenChange,
   onCreateNew 
 }: WorkspaceSwitchDialogProps) {
-  const [, setLocation] = useLocation();
+  const dispatch = useAppDispatch();
   const currentWorkspace = useAppSelector(state => state.workspace.currentWorkspace);
 
   const { data: workspaces = [], isLoading } = useQuery<Workspace[]>({
@@ -49,8 +48,8 @@ export function WorkspaceSwitchDialog({
     enabled: isOpen,
   });
 
-  const handleSelect = (workspaceId: number) => {
-    setLocation(`/workspace/${workspaceId}`);
+  const handleSelect = (workspace: Workspace) => {
+    dispatch(setCurrentWorkspace(workspace));
     onOpenChange(false);
   };
 
@@ -71,7 +70,7 @@ export function WorkspaceSwitchDialog({
               {workspaces.map((workspace) => (
                 <CommandItem
                   key={workspace.workspaceId}
-                  onSelect={() => handleSelect(workspace.workspaceId)}
+                  onSelect={() => handleSelect(workspace)}
                   className="flex items-center justify-between cursor-pointer"
                 >
                   <span>{workspace.name}</span>
