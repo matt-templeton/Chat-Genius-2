@@ -9,8 +9,8 @@ const config: Config.InitialOptions = {
     '^.+\\.tsx?$': ['ts-jest', {
       useESM: true,
       tsconfig: {
-        ...require('./tsconfig.json').compilerOptions,
-        module: 'CommonJS'
+        module: 'ESNext',
+        moduleResolution: 'bundler'
       }
     }]
   },
@@ -19,12 +19,18 @@ const config: Config.InitialOptions = {
     '^@db/(.*)$': '<rootDir>/db/$1',
     '^@db$': '<rootDir>/db/index.ts'
   },
-  extensionsToTreatAsEsm: ['.ts'],
+  extensionsToTreatAsEsm: ['.ts', '.tsx'],
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  testMatch: ['**/__tests__/**/*.ts?(x)', '**/?(*.)+(spec|test).ts?(x)'],
   globals: {
     'ts-jest': {
       useESM: true,
-    },
-  },
+      tsconfig: {
+        module: 'ESNext',
+        moduleResolution: 'bundler'
+      }
+    }
+  }
 };
 
 export default config;
