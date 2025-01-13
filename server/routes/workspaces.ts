@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from "@db";
-import { workspaces, userWorkspaces } from "@db/schema";
+import { workspaces, userWorkspaces, channels } from "@db/schema";
 import { eq, and } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
@@ -58,7 +58,7 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
 
 /**
  * @route POST /workspaces
- * @desc Create a new workspace
+ * @desc Create a new workspace with a default general channel
  */
 router.post('/', isAuthenticated, async (req: Request, res: Response) => {
   try {
@@ -77,6 +77,7 @@ router.post('/', isAuthenticated, async (req: Request, res: Response) => {
 
     const { name, description } = validationResult.data;
 
+    // Create workspace
     const [workspace] = await db.insert(workspaces).values({
       name,
       description,
@@ -90,6 +91,17 @@ router.post('/', isAuthenticated, async (req: Request, res: Response) => {
       userId: req.user!.userId,
       workspaceId: workspace.workspaceId,
       role: 'OWNER',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    // Create default general channel
+    await db.insert(channels).values({
+      workspaceId: workspace.workspaceId,
+      name: 'general',
+      topic: 'Default channel for general discussions',
+      channelType: 'PUBLIC',
+      archived: false,
       createdAt: new Date(),
       updatedAt: new Date()
     });

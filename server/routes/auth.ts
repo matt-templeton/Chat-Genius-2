@@ -122,16 +122,6 @@ router.post("/register", async (req: Request, res: Response) => {
       })
       .returning();
 
-    // Create default general channel
-    await db.insert(channels).values({
-      name: "general",
-      workspaceId: workspace.workspaceId,
-      archived: false,
-      channelType: "PUBLIC",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
     // Auto-verify for testing
     await db
       .update(users)
