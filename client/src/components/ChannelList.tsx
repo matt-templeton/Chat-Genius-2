@@ -1,3 +1,11 @@
+/**
+ * ChannelList Component
+ * Displays a list of channels in the current workspace with support for:
+ * - Public and private channels
+ * - Direct messages (DM type channels)
+ * - Archived channel toggle
+ * - Real-time updates via WebSocket
+ */
 import { useEffect } from "react";
 import { useAppDispatch, useAppSelector } from "@/store";
 import {
@@ -36,7 +44,7 @@ import {
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus, Archive, Loader2, Lock, Hash } from "lucide-react";
+import { Plus, Archive, Loader2, Lock, Hash, MessageSquare } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -48,11 +56,15 @@ const createChannelSchema = z.object({
     .min(1, "Channel name is required")
     .max(50, "Name is too long"),
   description: z.string().max(255, "Description is too long").optional(),
-  channelType: z.enum(["PUBLIC", "PRIVATE"]),
+  channelType: z.enum(["PUBLIC", "PRIVATE", "DM"]),
 });
 
 type CreateChannelForm = z.infer<typeof createChannelSchema>;
 
+/**
+ * ChannelList component displays all channels in the current workspace
+ * and handles channel creation, selection, and real-time updates.
+ */
 export function ChannelList() {
   const dispatch = useAppDispatch();
   const { channels, currentChannel, loading, error, showArchived } =
@@ -61,6 +73,10 @@ export function ChannelList() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const { toast } = useToast();
 
+  /**
+   * Handles real-time channel events from WebSocket
+   * @param event The channel event (CHANNEL_CREATED, CHANNEL_UPDATED, CHANNEL_ARCHIVED)
+   */
   const handleChannelEvent = (event: any) => {
     console.log("Received channel event:", event);
 
@@ -99,6 +115,7 @@ export function ChannelList() {
         break;
     }
   };
+
   // Initialize WebSocket connection
   useWebSocket({
     workspaceId: currentWorkspace?.workspaceId || 0,
@@ -139,8 +156,19 @@ export function ChannelList() {
     }
   }, [dispatch, currentWorkspace?.workspaceId, showArchived, toast]);
 
+  /**
+   * Handles channel creation
+   * @param data The channel creation form data
+   */
   const handleCreateChannel = async (data: CreateChannelForm) => {
-    if (!currentWorkspace?.workspaceId) return;
+    if (!currentWorkspace?.workspaceId) {
+      toast({
+        title: "Error",
+        description: "Please select a workspace first",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       await dispatch(
@@ -169,22 +197,34 @@ export function ChannelList() {
     }
   };
 
+  /**
+   * Handles channel selection
+   * @param channel The selected channel
+   */
   const handleSelectChannel = (channel: (typeof channels)[number]) => {
     dispatch(setCurrentChannel(channel));
   };
 
+  /**
+   * Toggles visibility of archived channels
+   */
   const handleToggleArchived = () => {
     dispatch(toggleShowArchived());
   };
 
+  /**
+   * Returns the appropriate icon for each channel type
+   * @param channelType The type of channel (PUBLIC, PRIVATE, or DM)
+   */
   const getChannelIcon = (channelType: string) => {
     switch (channelType) {
       case "PRIVATE":
         return <Lock className="h-4 w-4 mr-2" />;
+      case "DM":
+        return <MessageSquare className="h-4 w-4 mr-2" />;
       case "PUBLIC":
-        return <Hash className="h-4 w-4 mr-2" />;
       default:
-        return null;
+        return <Hash className="h-4 w-4 mr-2" />;
     }
   };
 
@@ -317,6 +357,7 @@ export function ChannelList() {
                       <SelectContent>
                         <SelectItem value="PUBLIC">Public</SelectItem>
                         <SelectItem value="PRIVATE">Private</SelectItem>
+                        <SelectItem value="DM">Direct Message</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

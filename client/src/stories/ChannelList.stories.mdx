@@ -1,0 +1,115 @@
+import { Meta, Story, Canvas, ArgsTable } from '@storybook/addon-docs';
+import { Provider } from 'react-redux';
+import { configureStore } from '@reduxjs/toolkit';
+import channelReducer from '../store/channelSlice';
+import workspaceReducer from '../store/workspaceSlice';
+import { ChannelList } from '../components/ChannelList';
+
+<Meta
+  title="Components/ChannelList"
+  component={ChannelList}
+  decorators={[
+    (Story) => {
+      const store = configureStore({
+        reducer: {
+          channel: channelReducer,
+          workspace: workspaceReducer,
+        },
+        preloadedState: {
+          workspace: {
+            currentWorkspace: {
+              workspaceId: 1,
+              name: 'Test Workspace',
+            },
+          },
+          channel: {
+            channels: [
+              {
+                channelId: 1,
+                name: 'general',
+                workspaceId: 1,
+                archived: false,
+                channelType: 'PUBLIC',
+                createdAt: new Date().toISOString(),
+              },
+              {
+                channelId: 2,
+                name: 'random',
+                workspaceId: 1,
+                archived: false,
+                channelType: 'PUBLIC',
+                createdAt: new Date().toISOString(),
+              },
+              {
+                channelId: 3,
+                name: 'archived-channel',
+                workspaceId: 1,
+                archived: true,
+                channelType: 'PUBLIC',
+                createdAt: new Date().toISOString(),
+              },
+              {
+                channelId: 4,
+                name: 'private-team',
+                workspaceId: 1,
+                archived: false,
+                channelType: 'PRIVATE',
+                createdAt: new Date().toISOString(),
+              },
+            ],
+            loading: false,
+            error: null,
+            showArchived: false,
+            currentChannel: null,
+          },
+        },
+      });
+      return (
+        <Provider store={store}>
+          <Story />
+        </Provider>
+      );
+    },
+  ]}
+/>
+
+# ChannelList
+
+The ChannelList component displays all channels in the current workspace, with support for showing/hiding archived channels.
+
+## Features
+- Displays both public and private channels
+- Toggle to show/hide archived channels
+- Create new channels
+- Select and switch between channels
+- Visual indicators for channel type (public/private) and archived status
+
+<Canvas>
+  <Story name="Default">
+    <div className="h-screen w-64 bg-background">
+      <ChannelList />
+    </div>
+  </Story>
+</Canvas>
+
+## Usage
+
+```tsx
+import { ChannelList } from '@/components/ChannelList';
+
+function Sidebar() {
+  return (
+    <div className="w-64 bg-background">
+      <ChannelList />
+    </div>
+  );
+}
+```
+
+## Implementation Notes
+
+The component relies on Redux for state management and WebSocket for real-time updates. It:
+- Fetches channels when the workspace changes or when the archived toggle is flipped
+- Listens for WebSocket events to update channels in real-time
+- Handles channel creation through a modal form
+- Properly displays channel status (archived) and type (public/private) with icons

@@ -1,0 +1,106 @@
+import { Meta, Story, Canvas, ArgsTable } from '@storybook/addon-docs';
+import { Provider } from 'react-redux';
+import { configureStore } from '@reduxjs/toolkit';
+import channelReducer from '../store/channelSlice';
+import workspaceReducer from '../store/workspaceSlice';
+import { DirectMessagesList } from '../components/DirectMessagesList';
+
+<Meta
+  title="Components/DirectMessagesList"
+  component={DirectMessagesList}
+  decorators={[
+    (Story) => {
+      const store = configureStore({
+        reducer: {
+          channel: channelReducer,
+          workspace: workspaceReducer,
+        },
+        preloadedState: {
+          workspace: {
+            currentWorkspace: {
+              workspaceId: 1,
+              name: 'Test Workspace',
+            },
+          },
+          channel: {
+            channels: [
+              {
+                channelId: 1,
+                name: 'john.doe',
+                workspaceId: 1,
+                archived: false,
+                channelType: 'DM',
+                createdAt: new Date().toISOString(),
+              },
+              {
+                channelId: 2,
+                name: 'jane.smith',
+                workspaceId: 1,
+                archived: false,
+                channelType: 'DM',
+                createdAt: new Date().toISOString(),
+              },
+              {
+                channelId: 3,
+                name: 'archived-dm',
+                workspaceId: 1,
+                archived: true,
+                channelType: 'DM',
+                createdAt: new Date().toISOString(),
+              },
+            ],
+            loading: false,
+            error: null,
+            showArchived: false,
+            currentChannel: null,
+          },
+        },
+      });
+      return (
+        <Provider store={store}>
+          <Story />
+        </Provider>
+      );
+    },
+  ]}
+/>
+
+# DirectMessagesList
+
+The DirectMessagesList component displays direct message channels in the current workspace.
+
+## Features
+- Filters and displays only DM-type channels
+- Excludes archived DMs by default
+- Select and switch between DMs
+- Visual indicators for current selection
+
+<Canvas>
+  <Story name="Default">
+    <div className="h-screen w-64 bg-background">
+      <DirectMessagesList />
+    </div>
+  </Story>
+</Canvas>
+
+## Usage
+
+```tsx
+import { DirectMessagesList } from '@/components/DirectMessagesList';
+
+function Sidebar() {
+  return (
+    <div className="w-64 bg-background">
+      <DirectMessagesList />
+    </div>
+  );
+}
+```
+
+## Implementation Notes
+
+The component:
+- Uses the same Redux channel state as ChannelList
+- Filters to show only DM-type channels
+- Excludes archived DMs for a cleaner interface
+- Uses MessageSquare icon to indicate DM channels
