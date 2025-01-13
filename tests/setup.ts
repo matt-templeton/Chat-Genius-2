@@ -22,10 +22,10 @@ beforeAll(async () => {
   // First find users with test emails
   const testUsers = await db.select().from(users).where(inArray(users.email, testEmails));
 
-  // Get workspace IDs from users' defaultWorkspace field
-  const workspaceIds = testUsers
-    .map(user => user.defaultWorkspace)
-    .filter((id): id is number => id !== null);
+  // Get workspace IDs owned by test users
+  const testUserIds = testUsers.map(user => user.userId);
+  const testWorkspaces = await db.select().from(workspaces).where(inArray(workspaces.userId, testUserIds));
+  const workspaceIds = testWorkspaces.map(ws => ws.workspaceId);
 
   // Delete in correct order to maintain referential integrity
   await db.delete(channels).where(inArray(channels.workspaceId, workspaceIds));
@@ -47,10 +47,10 @@ afterEach(async () => {
   // First find users with test emails
   const testUsers = await db.select().from(users).where(inArray(users.email, testEmails));
 
-  // Get workspace IDs from users' defaultWorkspace field
-  const workspaceIds = testUsers
-    .map(user => user.defaultWorkspace)
-    .filter((id): id is number => id !== null);
+  // Get workspace IDs owned by test users
+  const testUserIds = testUsers.map(user => user.userId);
+  const testWorkspaces = await db.select().from(workspaces).where(inArray(workspaces.userId, testUserIds));
+  const workspaceIds = testWorkspaces.map(ws => ws.workspaceId);
 
   // Delete in correct order to maintain referential integrity
   await db.delete(channels).where(inArray(channels.workspaceId, workspaceIds));
@@ -72,10 +72,10 @@ afterAll(async () => {
   // First find users with test emails
   const testUsers = await db.select().from(users).where(inArray(users.email, testEmails));
 
-  // Get workspace IDs from users' defaultWorkspace field
-  const workspaceIds = testUsers
-    .map(user => user.defaultWorkspace)
-    .filter((id): id is number => id !== null);
+  // Get workspace IDs owned by test users
+  const testUserIds = testUsers.map(user => user.userId);
+  const testWorkspaces = await db.select().from(workspaces).where(inArray(workspaces.userId, testUserIds));
+  const workspaceIds = testWorkspaces.map(ws => ws.workspaceId);
 
   // Delete in correct order to maintain referential integrity
   await db.delete(channels).where(inArray(channels.workspaceId, workspaceIds));
