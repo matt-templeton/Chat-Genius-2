@@ -397,7 +397,7 @@
       "/workspaces": {
         "get": {
           "tags": ["Workspaces"],
-          "summary": "List all workspaces",
+          "summary": "List all workspaces that authenticated user is a member of.",
           "responses": {
             "200": {
               "description": "Array of workspaces",

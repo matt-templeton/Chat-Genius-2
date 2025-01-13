@@ -77,14 +77,7 @@ export const createChannel = createAsyncThunk(
         return rejectWithValue(errorText || 'Failed to create channel');
       }
 
-      let data;
-      try {
-        data = await response.json();
-      } catch (e) {
-        console.error('Failed to parse channel creation response:', e);
-        return rejectWithValue('Invalid response from server');
-      }
-
+      const data = await response.json();
       if (!data) {
         console.error('No data returned from channel creation');
         return rejectWithValue('No data returned from server');
@@ -113,42 +106,29 @@ const channelSlice = createSlice({
       state.currentChannel = null;
       state.error = null;
     },
-    // New reducers for handling WebSocket events
+    // WebSocket event handlers (inactive for now)
     handleChannelCreated: (state, action) => {
       const channel = action.payload;
-      if (!state.channels.some(c => c.channelId === channel.id)) {
-        state.channels.push({
-          channelId: channel.id,
-          name: channel.name,
-          workspaceId: channel.workspaceId,
-          archived: channel.archived,
-          description: channel.description,
-          channelType: channel.isPrivate ? 'PRIVATE' : 'PUBLIC',
-          createdAt: channel.createdAt,
-        });
+      if (!state.channels.some(c => c.channelId === channel.channelId)) {
+        state.channels.push(channel);
       }
     },
     handleChannelUpdated: (state, action) => {
       const channel = action.payload;
-      const index = state.channels.findIndex(c => c.channelId === channel.id);
+      const index = state.channels.findIndex(c => c.channelId === channel.channelId);
       if (index !== -1) {
-        state.channels[index] = {
-          ...state.channels[index],
-          name: channel.name,
-          archived: channel.archived,
-          description: channel.description,
-        };
-        if (state.currentChannel?.channelId === channel.id) {
-          state.currentChannel = state.channels[index];
+        state.channels[index] = channel;
+        if (state.currentChannel?.channelId === channel.channelId) {
+          state.currentChannel = channel;
         }
       }
     },
     handleChannelArchived: (state, action) => {
-      const channel = action.payload;
-      const index = state.channels.findIndex(c => c.channelId === channel.id);
+      const channelId = action.payload;
+      const index = state.channels.findIndex(c => c.channelId === channelId);
       if (index !== -1) {
         state.channels[index].archived = true;
-        if (state.currentChannel?.channelId === channel.id) {
+        if (state.currentChannel?.channelId === channelId) {
           state.currentChannel = null;
         }
       }
