@@ -16,6 +16,7 @@ export class WebSocketManager {
 
         // Always allow Vite HMR connections
         if (protocol === 'vite-hmr') {
+          log('Allowing Vite HMR connection');
           return true;
         }
 
@@ -24,10 +25,11 @@ export class WebSocketManager {
         const workspaceId = parseInt(url.searchParams.get('workspaceId') || '');
 
         if (isNaN(workspaceId) || workspaceId <= 0) {
-          log(`Invalid workspace ID in connection request: ${workspaceId}`);
+          log(`Rejected connection - invalid workspace ID: ${workspaceId}`);
           return false;
         }
 
+        log(`Accepted connection for workspace ID: ${workspaceId}`);
         return true;
       }
     });
@@ -57,6 +59,7 @@ export class WebSocketManager {
     try {
       // Skip processing for Vite HMR connections
       if (request.headers['sec-websocket-protocol'] === 'vite-hmr') {
+        log('Processing Vite HMR connection');
         return;
       }
 
@@ -65,7 +68,7 @@ export class WebSocketManager {
 
       if (isNaN(workspaceId) || workspaceId <= 0) {
         log(`Rejecting connection with invalid workspace ID: ${workspaceId}`);
-        ws.close(4000, 'Workspace ID is required');
+        ws.close(4000, 'Invalid workspace ID');
         return;
       }
 
@@ -86,7 +89,7 @@ export class WebSocketManager {
         log(`WebSocket error for workspace ${workspaceId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
         this.clients.delete(ws);
         try {
-          ws.close();
+          ws.close(1011, 'Internal server error');
         } catch (e) {
           // Ignore close errors
         }
@@ -120,11 +123,10 @@ export class WebSocketManager {
       timestamp: new Date().toISOString()
     });
 
-    const clients = Array.from(this.clients.entries());
     let successCount = 0;
     let failureCount = 0;
 
-    for (const [ws, client] of clients) {
+    this.clients.forEach((client, ws) => {
       if (client.workspaceId === workspaceId && ws.readyState === WebSocket.OPEN) {
         try {
           ws.send(message);
@@ -134,13 +136,13 @@ export class WebSocketManager {
           log(`Failed to send message to client: ${error instanceof Error ? error.message : 'Unknown error'}`);
           this.clients.delete(ws);
           try {
-            ws.close();
+            ws.close(1011, 'Failed to send message');
           } catch (e) {
             // Ignore close errors
           }
         }
       }
-    }
+    });
 
     log(`Broadcast to workspace ${workspaceId}: ${successCount} successful, ${failureCount} failed`);
   }

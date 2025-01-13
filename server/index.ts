@@ -60,8 +60,26 @@ async function startServer() {
       serveStatic(app);
     }
 
-    // Start server
+    // Start server with retry logic for port conflicts
     const PORT = 5000;
+    server.on('error', (error: any) => {
+      if (error.code === 'EADDRINUSE') {
+        log(`Port ${PORT} is in use, attempting to close existing connections...`);
+        // Force close the server
+        server.close(() => {
+          log('Server closed, retrying...');
+          setTimeout(() => {
+            server.listen(PORT, "0.0.0.0", () => {
+              log(`serving on port ${PORT}`);
+            });
+          }, 1000);
+        });
+      } else {
+        console.error("Server error:", error);
+        process.exit(1);
+      }
+    });
+
     server.listen(PORT, "0.0.0.0", () => {
       log(`serving on port ${PORT}`);
     });
