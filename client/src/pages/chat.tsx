@@ -17,9 +17,5 @@ export default function ChatPage() {
     return null;
   }
 
-  return (
-    <div className="h-full bg-background">
-      <ChatArea />
-    </div>
-  );
+  return <div className="h-full bg-background">PLACEHOLDER</div>;
 }
