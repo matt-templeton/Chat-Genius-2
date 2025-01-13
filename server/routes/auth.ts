@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { hash, compare } from "bcrypt";
 import { db } from "@db";
-import { users, workspaces, channels } from "@db/schema";
+import { users, workspaces, userWorkspaces, channels } from "@db/schema";
 import { eq } from "drizzle-orm";
 import passport from "../middleware/auth";
 import type { Request, Response } from "express";
@@ -105,6 +105,16 @@ router.post("/register", async (req: Request, res: Response) => {
       })
       .returning();
 
+    await db.insert(channels).values({
+      workspaceId: workspace.workspaceId,
+      name: "general",
+      topic: "Default channel for general discussions",
+      channelType: "PUBLIC",
+      archived: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
     // Create user with default workspace
     const [user] = await db
       .insert(users)
@@ -121,6 +131,15 @@ router.post("/register", async (req: Request, res: Response) => {
         updatedAt: new Date(),
       })
       .returning();
+
+    // Create userWorkspace record with OWNER role
+    await db.insert(userWorkspaces).values({
+      userId: user.userId,
+      workspaceId: workspace.workspaceId,
+      role: "OWNER",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
 
     // Auto-verify for testing
     await db
