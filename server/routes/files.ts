@@ -111,7 +111,7 @@ async function verifyWorkspaceAccess(
       error: "Workspace Not Found",
       details: {
         code: "WORKSPACE_NOT_FOUND",
-        message: "The specified workspace does not exist",
+        message: "Workspace not found",
       },
     });
     return false;
@@ -219,7 +219,7 @@ router.get("/:fileId", isAuthenticated, async (req: Request, res: Response) => {
         error: "File Not Found",
         details: {
           code: "FILE_NOT_FOUND",
-          message: "The requested file does not exist",
+          message: "File not found",
         },
       });
     }
@@ -247,6 +247,71 @@ router.get("/:fileId", isAuthenticated, async (req: Request, res: Response) => {
       details: {
         code: "SERVER_ERROR",
         message: "Failed to fetch file",
+      },
+    });
+  }
+});
+
+/**
+ * @route DELETE /files/:fileId
+ * @desc Delete a file
+ */
+router.delete("/:fileId", isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { fileId } = req.params;
+
+    const file = await db.query.files.findFirst({
+      where: eq(files.fileId, parseInt(fileId)),
+    });
+
+    if (!file) {
+      return res.status(404).json({
+        error: "File Not Found",
+        details: {
+          code: "FILE_NOT_FOUND",
+          message: "File not found",
+        },
+      });
+    }
+
+    if (!file.workspaceId) {
+      return res.status(404).json({
+        error: "Invalid File",
+        details: {
+          code: "INVALID_FILE",
+          message: "File is not associated with any workspace",
+        },
+      });
+    }
+
+    // Verify workspace access
+    if (!(await verifyWorkspaceAccess(req, res, file.workspaceId))) {
+      return;
+    }
+
+    // Delete the file record first
+    await db.delete(files).where(eq(files.fileId, parseInt(fileId)));
+
+    // If there's a physical file, delete it
+    if (file.fileUrl) {
+      try {
+        const filePath = path.join(process.cwd(), file.fileUrl);
+        await fs.unlink(filePath);
+      } catch (error) {
+        console.error("Error deleting physical file:", error);
+        // Continue even if physical file deletion fails
+        // The file record has been removed from the database
+      }
+    }
+
+    res.status(204).send();
+  } catch (error) {
+    console.error("Error deleting file:", error);
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: {
+        code: "SERVER_ERROR",
+        message: "Failed to delete file",
       },
     });
   }

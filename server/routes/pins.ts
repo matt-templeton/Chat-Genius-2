@@ -45,7 +45,7 @@ router.post('/:messageId/pin', isAuthenticated, async (req: Request, res: Respon
         error: "Message Not Found",
         details: {
           code: "MESSAGE_NOT_FOUND",
-          message: "The specified message does not exist"
+          message: "Message not found"
         }
       });
     }
@@ -110,7 +110,7 @@ router.delete('/:messageId/pin', isAuthenticated, async (req: Request, res: Resp
         error: "Message Not Found",
         details: {
           code: "MESSAGE_NOT_FOUND",
-          message: "The specified message does not exist"
+          message: "Message not found"
         }
       });
     }

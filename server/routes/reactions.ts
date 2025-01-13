@@ -4,8 +4,14 @@ import { messageReactions, messages, emojis } from "@db/schema";
 import { eq, and } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
+import { z } from 'zod';
 
 const router = Router();
+
+// Input validation schema
+const addReactionSchema = z.object({
+  emojiId: z.number().int().positive("Valid emoji ID is required")
+});
 
 /**
  * @route POST /messages/:messageId/reactions
@@ -14,7 +20,20 @@ const router = Router();
 router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { messageId } = req.params;
-    const { emojiId } = req.body;
+    const validationResult = addReactionSchema.safeParse(req.body);
+
+    if (!validationResult.success) {
+      return res.status(400).json({
+        error: "Invalid Request",
+        details: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid emoji ID",
+          errors: validationResult.error.errors
+        }
+      });
+    }
+
+    const { emojiId } = validationResult.data;
 
     // First get the message to verify it exists and get its workspaceId
     const message = await db.query.messages.findFirst({
@@ -26,7 +45,7 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
         error: "Message Not Found",
         details: {
           code: "MESSAGE_NOT_FOUND",
-          message: "The specified message does not exist"
+          message: "Message not found"
         }
       });
     }
@@ -34,7 +53,7 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
     // Verify emoji exists and is not deleted
     const emoji = await db.query.emojis.findFirst({
       where: and(
-        eq(emojis.emojiId, parseInt(emojiId)),
+        eq(emojis.emojiId, emojiId),
         eq(emojis.deleted, false)
       )
     });
@@ -44,7 +63,7 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
         error: "Emoji Not Found",
         details: {
           code: "EMOJI_NOT_FOUND",
-          message: "The specified emoji does not exist or has been deleted"
+          message: "Emoji not found or has been deleted"
         }
       });
     }
@@ -53,7 +72,7 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
     const existingReaction = await db.query.messageReactions.findFirst({
       where: and(
         eq(messageReactions.messageId, parseInt(messageId)),
-        eq(messageReactions.emojiId, parseInt(emojiId)),
+        eq(messageReactions.emojiId, emojiId),
         eq(messageReactions.userId, req.user!.userId)
       )
     });
@@ -74,7 +93,7 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
       .values({
         messageId: parseInt(messageId),
         workspaceId: message.workspaceId,
-        emojiId: parseInt(emojiId),
+        emojiId,
         userId: req.user!.userId
       })
       .returning();
@@ -121,7 +140,7 @@ router.delete('/:messageId/reactions/:emojiId', isAuthenticated, async (req: Req
         error: "Message Not Found",
         details: {
           code: "MESSAGE_NOT_FOUND",
-          message: "The specified message does not exist"
+          message: "Message not found"
         }
       });
     }
@@ -140,7 +159,7 @@ router.delete('/:messageId/reactions/:emojiId', isAuthenticated, async (req: Req
         error: "Reaction Not Found",
         details: {
           code: "REACTION_NOT_FOUND",
-          message: "The specified reaction does not exist"
+          message: "Reaction not found"
         }
       });
     }
@@ -185,7 +204,7 @@ router.get('/:messageId/reactions', isAuthenticated, async (req: Request, res: R
         error: "Message Not Found",
         details: {
           code: "MESSAGE_NOT_FOUND",
-          message: "The specified message does not exist"
+          message: "Message not found"
         }
       });
     }
