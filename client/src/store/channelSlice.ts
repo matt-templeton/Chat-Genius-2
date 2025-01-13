@@ -1,4 +1,4 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, createAction } from '@reduxjs/toolkit';
 
 export interface Channel {
   channelId: number;
@@ -91,6 +91,10 @@ export const createChannel = createAsyncThunk(
   }
 );
 
+export const handleChannelCreated = createAction<Channel>('channel/handleChannelCreated');
+export const handleChannelUpdated = createAction<Channel>('channel/handleChannelUpdated');
+export const handleChannelArchived = createAction<number>('channel/handleChannelArchived');
+
 const channelSlice = createSlice({
   name: 'channel',
   initialState,
@@ -106,7 +110,6 @@ const channelSlice = createSlice({
       state.currentChannel = null;
       state.error = null;
     },
-    // WebSocket event handlers (inactive for now)
     handleChannelCreated: (state, action) => {
       const channel = action.payload;
       if (!state.channels.some(c => c.channelId === channel.channelId)) {
@@ -170,9 +173,6 @@ export const {
   setCurrentChannel,
   toggleShowArchived,
   clearChannels,
-  handleChannelCreated,
-  handleChannelUpdated,
-  handleChannelArchived,
 } = channelSlice.actions;
 
 export default channelSlice.reducer;

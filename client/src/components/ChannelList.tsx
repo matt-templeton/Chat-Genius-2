@@ -1,6 +1,14 @@
 import { useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { fetchChannels, createChannel, setCurrentChannel, toggleShowArchived } from '@/store/channelSlice';
+import { 
+  fetchChannels, 
+  createChannel, 
+  setCurrentChannel, 
+  toggleShowArchived,
+  handleChannelCreated,
+  handleChannelUpdated,
+  handleChannelArchived
+} from '@/store/channelSlice';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -27,6 +35,7 @@ import { Plus, Archive, Loader2, Lock, Hash } from 'lucide-react';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Switch } from '@/components/ui/switch';
+import { useWebSocket } from '@/hooks/useWebSocket';
 
 const createChannelSchema = z.object({
   name: z.string().min(1, 'Channel name is required').max(50, 'Name is too long'),
@@ -42,6 +51,47 @@ export function ChannelList() {
   const { currentWorkspace } = useAppSelector((state) => state.workspace);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const { toast } = useToast();
+
+  const handleChannelEvent = (event: any) => {
+    console.log('Received channel event:', event); 
+
+    switch (event.type) {
+      case 'CHANNEL_CREATED':
+        console.log('Processing CHANNEL_CREATED event:', event.channel); 
+        dispatch(handleChannelCreated({
+          channelId: event.channel.id,
+          name: event.channel.name,
+          description: event.channel.description,
+          workspaceId: event.channel.workspaceId,
+          channelType: event.channel.isPrivate ? 'PRIVATE' : 'PUBLIC',
+          archived: event.channel.archived,
+          createdAt: event.channel.createdAt
+        }));
+        break;
+      case 'CHANNEL_UPDATED':
+        console.log('Processing CHANNEL_UPDATED event:', event.channel); 
+        dispatch(handleChannelUpdated({
+          channelId: event.channel.id,
+          name: event.channel.name,
+          description: event.channel.description,
+          workspaceId: event.channel.workspaceId,
+          channelType: event.channel.isPrivate ? 'PRIVATE' : 'PUBLIC',
+          archived: event.channel.archived,
+          createdAt: event.channel.createdAt
+        }));
+        break;
+      case 'CHANNEL_ARCHIVED':
+        console.log('Processing CHANNEL_ARCHIVED event:', event.channel); 
+        dispatch(handleChannelArchived(event.channel.id));
+        break;
+    }
+  };
+
+  // Initialize WebSocket connection
+  useWebSocket({
+    workspaceId: currentWorkspace?.workspaceId || 0,
+    onChannelEvent: handleChannelEvent,
+  });
 
   const form = useForm<CreateChannelForm>({
     resolver: zodResolver(createChannelSchema),
