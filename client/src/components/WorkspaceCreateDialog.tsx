@@ -1,8 +1,9 @@
-import { useState } from "react";
+import * as z from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useAppDispatch } from "@/store";
 import { createWorkspace } from "@/store/workspaceSlice";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +12,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+
+const formSchema = z.object({
+  name: z.string()
+    .min(1, "Workspace name is required")
+    .max(50, "Workspace name cannot exceed 50 characters")
+    .refine(value => /^[a-zA-Z0-9-_ ]+$/.test(value), {
+      message: "Name can only contain letters, numbers, spaces, hyphens and underscores"
+    }),
+});
 
 interface WorkspaceCreateDialogProps {
   isOpen: boolean;
@@ -19,29 +38,24 @@ interface WorkspaceCreateDialogProps {
 }
 
 export function WorkspaceCreateDialog({ isOpen, onOpenChange }: WorkspaceCreateDialogProps) {
-  const [name, setName] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const dispatch = useAppDispatch();
   const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "Workspace name is required",
-      });
-      return;
-    }
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      name: "",
+    },
+  });
 
-    setIsSubmitting(true);
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      await dispatch(createWorkspace({ name: name.trim() })).unwrap();
+      await dispatch(createWorkspace({ name: values.name.trim() })).unwrap();
       toast({
         title: "Success",
         description: "Workspace created successfully",
       });
+      form.reset();
       onOpenChange(false);
     } catch (error) {
       toast({
@@ -49,46 +63,59 @@ export function WorkspaceCreateDialog({ isOpen, onOpenChange }: WorkspaceCreateD
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create workspace",
       });
-    } finally {
-      setIsSubmitting(false);
-      setName("");
     }
-  };
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
-        <form onSubmit={handleSubmit}>
-          <DialogHeader>
-            <DialogTitle>Create New Workspace</DialogTitle>
-            <DialogDescription>
-              Enter a name for your new workspace. You can add more details later.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <Input
-              id="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Workspace name"
-              className="col-span-3"
-              autoFocus
+        <DialogHeader>
+          <DialogTitle>Create New Workspace</DialogTitle>
+          <DialogDescription>
+            Enter a name for your new workspace. You can add more details later.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input 
+                      {...field} 
+                      placeholder="Enter workspace name"
+                      autoComplete="off"
+                      autoFocus
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isSubmitting || !name.trim()}>
-              {isSubmitting ? "Creating..." : "Create"}
-            </Button>
-          </DialogFooter>
-        </form>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  form.reset();
+                  onOpenChange(false);
+                }}
+                disabled={form.formState.isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit"
+                disabled={form.formState.isSubmitting}
+              >
+                {form.formState.isSubmitting ? "Creating..." : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
       </DialogContent>
     </Dialog>
   );

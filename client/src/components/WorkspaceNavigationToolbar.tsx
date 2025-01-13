@@ -6,6 +6,7 @@ import { useAppSelector } from "@/store";
 import { useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { WorkspaceCreateDialog } from "./WorkspaceCreateDialog";
+import { WorkspaceSwitchDialog } from "./WorkspaceSwitchDialog";
 import { useAppDispatch } from "@/store";
 import { fetchWorkspaces } from "@/store/workspaceSlice";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +15,7 @@ export function WorkspaceNavigationToolbar() {
   const { currentWorkspace, loading, error } = useAppSelector((state) => state.workspace);
   const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isSwitchDialogOpen, setIsSwitchDialogOpen] = useState(false);
   const dispatch = useAppDispatch();
   const { toast } = useToast();
 
@@ -39,8 +41,7 @@ export function WorkspaceNavigationToolbar() {
   };
 
   const handleWorkspaceClick = () => {
-    // TODO: Implement workspace switcher
-    console.log('Switch workspace clicked');
+    setIsSwitchDialogOpen(true);
   };
 
   return (
@@ -129,6 +130,13 @@ export function WorkspaceNavigationToolbar() {
       <WorkspaceCreateDialog 
         isOpen={isCreateDialogOpen}
         onOpenChange={setIsCreateDialogOpen}
+      />
+
+      {/* Workspace Switch Dialog */}
+      <WorkspaceSwitchDialog 
+        isOpen={isSwitchDialogOpen}
+        onOpenChange={setIsSwitchDialogOpen}
+        onCreateNew={handleCreateNew}
       />
     </div>
   );
