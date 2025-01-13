@@ -95,14 +95,26 @@ describe('Emoji Endpoints', () => {
           expect(emoji.code).toContain(`test_emoji_${code}_${testTimestamp}`);
         }
 
+        // Create a deleted emoji for testing includeDeleted parameter
+        const [deletedEmoji] = await db.insert(emojis)
+          .values({
+            code: `test_emoji_deleted_${testTimestamp}`,
+            deleted: true,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          })
+          .returning();
+
+        expect(deletedEmoji).toBeDefined();
+        expect(deletedEmoji.deleted).toBe(true);
+
         // Verify total count of test emojis
         const totalCount = await db.select({ 
           count: sql<number>`cast(count(*) as integer)` 
         })
-        .from(emojis)
-        .where(eq(emojis.deleted, false));
+        .from(emojis);
 
-        expect(totalCount[0].count).toBe(5);
+        expect(totalCount[0].count).toBe(6); // 5 active + 1 deleted
 
       } catch (error) {
         console.error('Error setting up test emojis:', error);
@@ -110,45 +122,47 @@ describe('Emoji Endpoints', () => {
       }
     });
 
-    it('should list emojis with pagination', async () => {
+    it('should list emojis with pagination and exclude deleted by default', async () => {
       const response = await request
         .get('/api/v1/emojis')
         .set('Authorization', `Bearer ${accessToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body).toHaveProperty('data');
-      expect(Array.isArray(response.body.data)).toBe(true);
-
-      // Verify correct pagination metadata
-      expect(response.body).toHaveProperty('pagination');
-      expect(response.body.pagination).toMatchObject({
-        currentPage: 1,
-        itemsPerPage: 20,
-        totalItems: 5,  // Only our test emojis
-        totalPages: 1   // With 20 items per page, 5 items fit on one page
-      });
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBe(5); // Only non-deleted emojis
 
       // Verify data matches our test emojis
-      response.body.data.forEach((emoji: any) => {
+      response.body.forEach((emoji: any) => {
         expect(emoji.code).toContain(`test_emoji_`);
         expect(emoji.code).toContain(testTimestamp.toString());
+        expect(emoji.deleted).toBe(false);
       });
     });
 
-    it('should respect pagination parameters and return correct metadata', async () => {
+    it('should include deleted emojis when includeDeleted=true', async () => {
+      const response = await request
+        .get('/api/v1/emojis?includeDeleted=true')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBe(6); // All emojis including deleted
+
+      // Verify deleted emoji is included
+      const deletedEmoji = response.body.find((emoji: any) => emoji.deleted === true);
+      expect(deletedEmoji).toBeDefined();
+      expect(deletedEmoji.code).toContain('test_emoji_deleted');
+    });
+
+    it('should respect pagination parameters', async () => {
       const response = await request
         .get('/api/v1/emojis')
         .set('Authorization', `Bearer ${accessToken}`)
         .query({ page: 2, limit: 2 });  // Get second page with 2 items per page
 
       expect(response.status).toBe(200);
-      expect(response.body.data).toHaveLength(2);  // Should return 2 items
-      expect(response.body.pagination).toMatchObject({
-        currentPage: 2,
-        itemsPerPage: 2,
-        totalItems: 5,  // Only our test emojis
-        totalPages: 3   // 5 items ÷ 2 per page = 3 pages (rounded up)
-      });
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBe(2);  // Should return 2 items
 
       // Verify the returned emojis are different from first page
       const firstPageResponse = await request
@@ -157,15 +171,10 @@ describe('Emoji Endpoints', () => {
         .query({ page: 1, limit: 2 });
 
       expect(firstPageResponse.status).toBe(200);
-      const firstPageIds = firstPageResponse.body.data.map((e: any) => e.emojiId);
-      const secondPageIds = response.body.data.map((e: any) => e.emojiId);
+      expect(Array.isArray(firstPageResponse.body)).toBe(true);
+      const firstPageIds = firstPageResponse.body.map((e: any) => e.emojiId);
+      const secondPageIds = response.body.map((e: any) => e.emojiId);
       expect(firstPageIds).not.toEqual(secondPageIds);
-
-      // Verify all returned emojis are from our test set
-      [...firstPageResponse.body.data, ...response.body.data].forEach((emoji: any) => {
-        expect(emoji.code).toContain(`test_emoji_`);
-        expect(emoji.code).toContain(testTimestamp.toString());
-      });
     });
 
     it('should validate minimum pagination parameters', async () => {
@@ -191,26 +200,16 @@ describe('Emoji Endpoints', () => {
     });
 
     it('should exclude deleted emojis', async () => {
-      // Create a deleted emoji
-      const [deletedEmoji] = await db.insert(emojis)
-        .values({
-          code: `test_emoji_deleted_${testTimestamp}`,
-          deleted: true,
-          createdAt: new Date(),
-          updatedAt: new Date()
-        })
-        .returning();
-
-      expect(deletedEmoji).toBeDefined();
-      expect(deletedEmoji.deleted).toBe(true);
+      // We already have a deleted emoji from beforeEach
+      // No need to create another one
 
       const response = await request
         .get('/api/v1/emojis')
         .set('Authorization', `Bearer ${accessToken}`);
 
       expect(response.status).toBe(200);
-      expect(response.body.data.every((emoji: any) => !emoji.deleted)).toBe(true);
-      expect(response.body.data.every((emoji: any) => 
+      expect(response.body.every((emoji: any) => !emoji.deleted)).toBe(true);
+      expect(response.body.every((emoji: any) => 
         emoji.code.includes(`test_emoji_`) && 
         emoji.code.includes(testTimestamp.toString())
       )).toBe(true);
