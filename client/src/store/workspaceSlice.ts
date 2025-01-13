@@ -24,22 +24,19 @@ export const fetchWorkspaces = createAsyncThunk(
   'workspace/fetchWorkspaces',
   async (_, { rejectWithValue }) => {
     try {
-      const token = localStorage.getItem('accessToken');
-      console.log('Making fetch request to /api/v1/workspaces');
       const response = await fetch('/api/v1/workspaces', {
         headers: {
-          'Authorization': `Bearer ${token}`,
-        }
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Fetch workspaces failed:', errorText);
-        return rejectWithValue(errorText || 'Failed to fetch workspaces');
+        const errorData = await response.text();
+        return rejectWithValue(errorData || 'Failed to fetch workspaces');
       }
 
       const data = await response.json();
-      console.log('Fetch workspaces response:', data);
       return data;
     } catch (error) {
       console.error('Error in fetchWorkspaces:', error);
@@ -52,24 +49,21 @@ export const createWorkspace = createAsyncThunk(
   'workspace/createWorkspace',
   async (workspace: { name: string }, { rejectWithValue }) => {
     try {
-      const token = localStorage.getItem('accessToken');
       const response = await fetch('/api/v1/workspaces', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
         },
+        credentials: 'include',
         body: JSON.stringify(workspace),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Create workspace failed:', errorText);
-        return rejectWithValue(errorText || 'Failed to create workspace');
+        const errorData = await response.text();
+        return rejectWithValue(errorData || 'Failed to create workspace');
       }
 
       const data = await response.json();
-      console.log('Create workspace response:', data);
       return data;
     } catch (error) {
       console.error('Error in createWorkspace:', error);
@@ -100,11 +94,15 @@ const workspaceSlice = createSlice({
       .addCase(fetchWorkspaces.fulfilled, (state, action) => {
         state.loading = false;
         state.workspaces = Array.isArray(action.payload) ? action.payload : [];
+        // Set first workspace as current if none is selected
+        if (!state.currentWorkspace && state.workspaces.length > 0) {
+          state.currentWorkspace = state.workspaces[0];
+        }
         state.error = null;
       })
       .addCase(fetchWorkspaces.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string || 'Failed to fetch workspaces';
+        state.error = action.payload as string;
       })
       .addCase(createWorkspace.pending, (state) => {
         state.loading = true;
@@ -120,7 +118,7 @@ const workspaceSlice = createSlice({
       })
       .addCase(createWorkspace.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string || 'Failed to create workspace';
+        state.error = action.payload as string;
       });
   },
 });
