@@ -1,7 +1,9 @@
-import { useState } from "react";
+import * as z from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { useAppDispatch } from "@/store";
+import { createChannel } from "@/store/channelSlice";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -9,8 +11,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Form,
   FormControl,
@@ -19,17 +19,21 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 
 const channelSchema = z.object({
-  name: z.string().min(1, "Channel name is required"),
+  name: z.string()
+    .min(1, "Channel name is required")
+    .max(50, "Channel name cannot exceed 50 characters")
+    .refine(value => /^[a-zA-Z0-9-_]+$/.test(value), {
+      message: "Name can only contain letters, numbers, hyphens and underscores"
+    }),
   channelType: z.enum(["PUBLIC", "PRIVATE"]).default("PUBLIC"),
   topic: z.string().optional(),
 });
-
-type FormData = z.infer<typeof channelSchema>;
 
 interface ChannelCreateDialogProps {
   workspaceId: number;
@@ -44,10 +48,10 @@ export function ChannelCreateDialog({
   onOpenChange,
   onChannelCreated,
 }: ChannelCreateDialogProps) {
-  const [isCreating, setIsCreating] = useState(false);
   const { toast } = useToast();
+  const dispatch = useAppDispatch();
 
-  const form = useForm<FormData>({
+  const form = useForm<z.infer<typeof channelSchema>>({
     resolver: zodResolver(channelSchema),
     defaultValues: {
       name: "",
@@ -56,42 +60,31 @@ export function ChannelCreateDialog({
     },
   });
 
-  const onSubmit = async (data: FormData) => {
+  const onSubmit = async (data: z.infer<typeof channelSchema>) => {
     try {
-      setIsCreating(true);
-      const response = await fetch("/api/v1/channels", {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...data,
-          workspaceId,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(await response.text());
-      }
+      await dispatch(createChannel({ 
+        workspaceId, 
+        channel: {
+          name: data.name.trim(),
+          channelType: data.channelType,
+          topic: data.topic || undefined,
+        }
+      })).unwrap();
 
       toast({
-        title: "Channel created",
-        description: `#${data.name} has been created successfully.`,
+        title: "Success",
+        description: `Channel #${data.name} has been created`,
       });
 
       onChannelCreated?.();
-      onOpenChange(false);
       form.reset();
+      onOpenChange(false);
     } catch (error) {
       toast({
-        title: "Error creating channel",
-        description:
-          error instanceof Error ? error.message : "Something went wrong",
         variant: "destructive",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create channel",
       });
-    } finally {
-      setIsCreating(false);
     }
   };
 
@@ -110,7 +103,12 @@ export function ChannelCreateDialog({
                 <FormItem>
                   <FormLabel>Channel name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. project-updates" {...field} />
+                    <Input 
+                      placeholder="e.g. project-updates" 
+                      {...field} 
+                      autoComplete="off"
+                      autoFocus
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -159,8 +157,22 @@ export function ChannelCreateDialog({
             />
 
             <DialogFooter>
-              <Button type="submit" disabled={isCreating}>
-                {isCreating ? "Creating..." : "Create Channel"}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  form.reset();
+                  onOpenChange(false);
+                }}
+                disabled={form.formState.isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit"
+                disabled={form.formState.isSubmitting}
+              >
+                {form.formState.isSubmitting ? "Creating..." : "Create Channel"}
               </Button>
             </DialogFooter>
           </form>

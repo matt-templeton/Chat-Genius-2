@@ -114,6 +114,9 @@ export function ChannelList() {
         workspaceId={currentWorkspace.workspaceId}
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
+        onChannelCreated={() => {
+          queryClient.invalidateQueries({ queryKey: [channelsQueryKey] });
+        }}
       />
 
       {/* Channel List */}
