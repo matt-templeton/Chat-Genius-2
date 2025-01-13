@@ -25,6 +25,7 @@ export const fetchWorkspaces = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem('accessToken');
+      console.log('Making fetch request to /api/v1/workspaces');
       const response = await fetch('/api/v1/workspaces', {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -33,12 +34,15 @@ export const fetchWorkspaces = createAsyncThunk(
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('Fetch workspaces failed:', errorText);
         return rejectWithValue(errorText || 'Failed to fetch workspaces');
       }
 
       const data = await response.json();
-      return data.workspaces || [];
+      console.log('Fetch workspaces response:', data);
+      return data;
     } catch (error) {
+      console.error('Error in fetchWorkspaces:', error);
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to fetch workspaces');
     }
   }
@@ -60,12 +64,15 @@ export const createWorkspace = createAsyncThunk(
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('Create workspace failed:', errorText);
         return rejectWithValue(errorText || 'Failed to create workspace');
       }
 
       const data = await response.json();
+      console.log('Create workspace response:', data);
       return data;
     } catch (error) {
+      console.error('Error in createWorkspace:', error);
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to create workspace');
     }
   }
@@ -92,7 +99,7 @@ const workspaceSlice = createSlice({
       })
       .addCase(fetchWorkspaces.fulfilled, (state, action) => {
         state.loading = false;
-        state.workspaces = action.payload;
+        state.workspaces = Array.isArray(action.payload) ? action.payload : [];
         state.error = null;
       })
       .addCase(fetchWorkspaces.rejected, (state, action) => {
@@ -105,8 +112,10 @@ const workspaceSlice = createSlice({
       })
       .addCase(createWorkspace.fulfilled, (state, action) => {
         state.loading = false;
-        state.workspaces.push(action.payload);
-        state.currentWorkspace = action.payload;
+        if (action.payload) {
+          state.workspaces.push(action.payload);
+          state.currentWorkspace = action.payload;
+        }
         state.error = null;
       })
       .addCase(createWorkspace.rejected, (state, action) => {

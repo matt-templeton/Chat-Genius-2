@@ -21,6 +21,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useToast } from '@/hooks/use-toast';
+import { useLocation } from 'wouter';
 
 const createWorkspaceSchema = z.object({
   name: z.string().min(1, 'Workspace name is required').max(50, 'Name is too long'),
@@ -33,8 +34,10 @@ export function WorkspaceNavigation() {
   const { workspaces, currentWorkspace, loading, error } = useSelector(
     (state: RootState) => state.workspace
   );
+  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const { toast } = useToast();
+  const [location, setLocation] = useLocation();
 
   const form = useForm<CreateWorkspaceForm>({
     resolver: zodResolver(createWorkspaceSchema),
@@ -44,20 +47,34 @@ export function WorkspaceNavigation() {
   });
 
   useEffect(() => {
-    const loadWorkspaces = async () => {
-      try {
-        await dispatch(fetchWorkspaces()).unwrap();
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: error instanceof Error ? error.message : "Failed to load workspaces",
-          variant: "destructive",
-        });
-      }
-    };
+    // Only fetch workspaces if we're authenticated and on the chat page
+    if (isAuthenticated && location.startsWith('/chat')) {
+      const loadWorkspaces = async () => {
+        try {
+          console.log('Fetching workspaces...');
+          const result = await dispatch(fetchWorkspaces()).unwrap();
+          console.log('Fetched workspaces:', result);
 
-    loadWorkspaces();
-  }, [dispatch, toast]);
+          // If we have workspaces but no current workspace selected, select the first one
+          if (result.length > 0 && !currentWorkspace) {
+            dispatch(setCurrentWorkspace(result[0]));
+          }
+        } catch (error) {
+          console.error('Error fetching workspaces:', error);
+          toast({
+            title: "Error",
+            description: error instanceof Error ? error.message : "Failed to load workspaces",
+            variant: "destructive",
+          });
+        }
+      };
+
+      loadWorkspaces();
+    } else if (!isAuthenticated && location.startsWith('/chat')) {
+      // Redirect to login if not authenticated
+      setLocation('/login');
+    }
+  }, [dispatch, location, currentWorkspace, isAuthenticated, toast, setLocation]);
 
   const handleCreateWorkspace = async (data: CreateWorkspaceForm) => {
     try {
@@ -127,6 +144,11 @@ export function WorkspaceNavigation() {
       </div>
     );
   };
+
+  // Don't render anything if we're not on the chat page or not authenticated
+  if (!location.startsWith('/chat') || !isAuthenticated) {
+    return null;
+  }
 
   return (
     <>
