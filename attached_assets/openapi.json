@@ -47,7 +47,7 @@
                 }
               }
             },
-            "description": "Creates a user record (deactivated=false) and sends a verification email."
+            "description": "Creates a user record (deactivated=false) and sends a verification email. creates default workspace for user."
           },
           "responses": {
             "201": {
