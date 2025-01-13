@@ -13,7 +13,7 @@ const createChannelSchema = z.object({
   name: z.string().min(1, "Channel name is required"),
   workspaceId: z.number().int().positive("Valid workspace ID is required"),
   topic: z.string().optional(),
-  type: z.enum(['PUBLIC', 'PRIVATE']).default('PUBLIC')
+  channelType: z.enum(['PUBLIC', 'PRIVATE', 'DM']).default('PUBLIC')
 });
 
 const updateChannelSchema = z.object({
@@ -121,7 +121,7 @@ router.post('/', isAuthenticated, async (req: Request, res: Response) => {
       });
     }
 
-    const { name, topic, workspaceId, type } = validationResult.data;
+    const { name, topic, workspaceId, channelType } = validationResult.data;
 
     // Verify workspace exists
     const workspace = await db.query.workspaces.findFirst({
@@ -142,7 +142,7 @@ router.post('/', isAuthenticated, async (req: Request, res: Response) => {
       name,
       topic,
       workspaceId,
-      type,
+      channelType,
       archived: false,
       createdAt: new Date(),
       updatedAt: new Date()
