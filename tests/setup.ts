@@ -1,6 +1,6 @@
 import { db } from '../db';
-import { users } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { users, workspaces, channels } from '../db/schema';
+import { eq, inArray } from 'drizzle-orm';
 import '@jest/globals';
 
 // Increase test timeout for slower DB operations
@@ -10,32 +10,75 @@ jest.setTimeout(30000);
 beforeAll(async () => {
   // Database is already configured through the DATABASE_URL environment variable
   // Clean up any existing test data
-  await db.delete(users).where(eq(users.email, 'test@example.com'));
-  await db.delete(users).where(eq(users.email, 'login.test@example.com'));
-  await db.delete(users).where(eq(users.email, 'verify.test@example.com'));
-  await db.delete(users).where(eq(users.email, 'refresh.test@example.com'));
-  await db.delete(users).where(eq(users.email, 'logout.test@example.com'));
-  await db.delete(users).where(eq(users.email, 'duplicate@example.com'));
+  const testEmails = [
+    'test@example.com',
+    'login.test@example.com', 
+    'verify.test@example.com',
+    'refresh.test@example.com',
+    'logout.test@example.com',
+    'duplicate@example.com'
+  ];
+
+  // First find users with test emails
+  const testUsers = await db.select().from(users).where(inArray(users.email, testEmails));
+
+  // Get workspace IDs owned by test users
+  const testUserIds = testUsers.map(user => user.userId);
+  const testWorkspaces = await db.select().from(workspaces).where(inArray(workspaces.userId, testUserIds));
+  const workspaceIds = testWorkspaces.map(ws => ws.workspaceId);
+
+  // Delete in correct order to maintain referential integrity
+  await db.delete(channels).where(inArray(channels.workspaceId, workspaceIds));
+  await db.delete(workspaces).where(inArray(workspaces.workspaceId, workspaceIds));
+  await db.delete(users).where(inArray(users.email, testEmails));
 });
 
 // Cleanup after each test
 afterEach(async () => {
-  // Clean up test data after each test
-  await db.delete(users).where(eq(users.email, 'test@example.com'));
-  await db.delete(users).where(eq(users.email, 'login.test@example.com'));
-  await db.delete(users).where(eq(users.email, 'verify.test@example.com'));
-  await db.delete(users).where(eq(users.email, 'refresh.test@example.com'));
-  await db.delete(users).where(eq(users.email, 'logout.test@example.com'));
-  await db.delete(users).where(eq(users.email, 'duplicate@example.com'));
+  const testEmails = [
+    'test@example.com',
+    'login.test@example.com', 
+    'verify.test@example.com',
+    'refresh.test@example.com',
+    'logout.test@example.com',
+    'duplicate@example.com'
+  ];
+
+  // First find users with test emails
+  const testUsers = await db.select().from(users).where(inArray(users.email, testEmails));
+
+  // Get workspace IDs owned by test users
+  const testUserIds = testUsers.map(user => user.userId);
+  const testWorkspaces = await db.select().from(workspaces).where(inArray(workspaces.userId, testUserIds));
+  const workspaceIds = testWorkspaces.map(ws => ws.workspaceId);
+
+  // Delete in correct order to maintain referential integrity
+  await db.delete(channels).where(inArray(channels.workspaceId, workspaceIds));
+  await db.delete(workspaces).where(inArray(workspaces.workspaceId, workspaceIds));
+  await db.delete(users).where(inArray(users.email, testEmails));
 });
 
 // Final cleanup
 afterAll(async () => {
-  // Clean up all test data one final time
-  await db.delete(users).where(eq(users.email, 'test@example.com'));
-  await db.delete(users).where(eq(users.email, 'login.test@example.com'));
-  await db.delete(users).where(eq(users.email, 'verify.test@example.com'));
-  await db.delete(users).where(eq(users.email, 'refresh.test@example.com'));
-  await db.delete(users).where(eq(users.email, 'logout.test@example.com'));
-  await db.delete(users).where(eq(users.email, 'duplicate@example.com'));
+  const testEmails = [
+    'test@example.com',
+    'login.test@example.com', 
+    'verify.test@example.com',
+    'refresh.test@example.com',
+    'logout.test@example.com',
+    'duplicate@example.com'
+  ];
+
+  // First find users with test emails
+  const testUsers = await db.select().from(users).where(inArray(users.email, testEmails));
+
+  // Get workspace IDs owned by test users
+  const testUserIds = testUsers.map(user => user.userId);
+  const testWorkspaces = await db.select().from(workspaces).where(inArray(workspaces.userId, testUserIds));
+  const workspaceIds = testWorkspaces.map(ws => ws.workspaceId);
+
+  // Delete in correct order to maintain referential integrity
+  await db.delete(channels).where(inArray(channels.workspaceId, workspaceIds));
+  await db.delete(workspaces).where(inArray(workspaces.workspaceId, workspaceIds));
+  await db.delete(users).where(inArray(users.email, testEmails));
 });

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { hash, compare } from 'bcrypt';
 import { db } from "@db";
-import { users } from "@db/schema";
+import { users, workspaces, channels } from "@db/schema";
 import { eq } from "drizzle-orm";
 import passport from '../middleware/auth';
 import type { Request, Response } from 'express';
@@ -99,6 +99,31 @@ router.post('/register', async (req: Request, res: Response) => {
         updatedAt: new Date()
       })
       .returning();
+
+    // Create default workspace
+    const [workspace] = await db.insert(workspaces)
+      .values({
+        name: `${displayName}'s Workspace`,
+        description: 'Default workspace',
+        archived: false,
+        userId: user.userId,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+
+    // Create default general channel
+    await db.insert(channels)
+      .values({
+        name: 'general',
+        workspaceId: workspace.workspaceId,
+        isPrivate: false,
+        archived: false,
+        description: 'Default channel',
+        channelType: 'PUBLIC',
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
 
     // Auto-verify for testing
     await db.update(users)
