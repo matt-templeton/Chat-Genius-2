@@ -57,7 +57,7 @@ export const createChannel = createAsyncThunk(
   async ({ workspaceId, channel }: { workspaceId: number, channel: Partial<Channel> }, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/channels`, {
+      const response = await fetch('/api/v1/channels', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -65,6 +65,7 @@ export const createChannel = createAsyncThunk(
         },
         body: JSON.stringify({
           name: channel.name,
+          workspaceId: workspaceId,
           description: channel.description || undefined,
           channelType: channel.channelType,
         }),
