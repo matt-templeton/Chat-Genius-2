@@ -85,24 +85,12 @@ router.post('/register', async (req: Request, res: Response) => {
     // Hash password
     const passwordHash = await hash(password, 10);
 
-    // Create default workspace first
-    const [workspace] = await db.insert(workspaces)
-      .values({
-        name: `${displayName}'s Workspace`,
-        description: 'Default workspace',
-        archived: false,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      })
-      .returning();
-
-    // Create user with default workspace
+    // Create user first
     const [user] = await db.insert(users)
       .values({
         email,
         passwordHash,
         displayName,
-        defaultWorkspace: workspace.workspaceId,
         emailVerified: false,
         deactivated: false,
         lastKnownPresence: 'ONLINE',
@@ -112,20 +100,32 @@ router.post('/register', async (req: Request, res: Response) => {
       })
       .returning();
 
-    // Update workspace with user ID after user creation
-    await db.update(workspaces)
-      .set({ userId: user.userId })
-      .where(eq(workspaces.workspaceId, workspace.workspaceId));
+    // Create default workspace
+    const [workspace] = await db.insert(workspaces)
+      .values({
+        name: `${displayName}'s Workspace`,
+        description: 'Default workspace',
+        archived: false,
+        userId: user.userId,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+      .returning();
+
+    // Update user with default workspace
+    await db.update(users)
+      .set({ defaultWorkspace: workspace.workspaceId })
+      .where(eq(users.userId, user.userId));
 
     // Create default general channel
     await db.insert(channels)
       .values({
         name: 'general',
         workspaceId: workspace.workspaceId,
-        isPrivate: false,
-        archived: false,
         description: 'Default channel',
         channelType: 'PUBLIC',
+        archived: false,
+        topic: 'General discussions',
         createdAt: new Date(),
         updatedAt: new Date()
       });
