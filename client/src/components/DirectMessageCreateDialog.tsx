@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,9 +8,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { useAppDispatch } from "@/store";
 import { createDirectMessage } from "@/store/channelSlice";
+import { Combobox } from "@/components/ui/combobox";
 
 const dmSchema = z.object({
-  participants: z.array(z.string()).min(1, "Select at least one participant"),
+  participant: z.string().min(1, "Select a participant"),
 });
 
 type FormData = z.infer<typeof dmSchema>;
@@ -29,22 +30,63 @@ export function DirectMessageCreateDialog({
   onDmCreated,
 }: DirectMessageCreateDialogProps) {
   const [isCreating, setIsCreating] = useState(false);
+  const [members, setMembers] = useState<Array<{ label: string; value: string }>>([]);
   const { toast } = useToast();
   const dispatch = useAppDispatch();
 
   const form = useForm<FormData>({
     resolver: zodResolver(dmSchema),
     defaultValues: {
-      participants: [],
+      participant: "",
     },
   });
+
+  // Fetch workspace members when dialog opens
+  useEffect(() => {
+    const fetchMembers = async () => {
+      try {
+        const token = localStorage.getItem('accessToken');
+        const response = await fetch(`/api/v1/workspaces/${workspaceId}/members`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch workspace members');
+        }
+
+        const data = await response.json();
+        // Filter out the current user and format for ComboBox
+        const currentUser = localStorage.getItem('userId');
+        const memberOptions = data
+          .filter((member: any) => member.userId !== currentUser)
+          .map((member: any) => ({
+            label: member.displayName,
+            value: member.displayName,
+          }));
+
+        setMembers(memberOptions);
+      } catch (error) {
+        toast({
+          title: "Error fetching members",
+          description: error instanceof Error ? error.message : "Failed to load workspace members",
+          variant: "destructive",
+        });
+      }
+    };
+
+    if (open && workspaceId) {
+      fetchMembers();
+    }
+  }, [open, workspaceId, toast]);
 
   const onSubmit = async (data: FormData) => {
     try {
       setIsCreating(true);
       await dispatch(createDirectMessage({ 
         workspaceId, 
-        participants: data.participants
+        participants: [data.participant]
       })).unwrap();
 
       toast({
@@ -76,15 +118,17 @@ export function DirectMessageCreateDialog({
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
-              name="participants"
+              name="participant"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Select participants</FormLabel>
+                  <FormLabel>Select participant</FormLabel>
                   <FormControl>
-                    {/* TODO: Add user search and selection component */}
-                    <div className="text-sm text-muted-foreground">
-                      User selection coming soon...
-                    </div>
+                    <Combobox
+                      options={members}
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder="Search members..."
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
