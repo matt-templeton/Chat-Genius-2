@@ -6,6 +6,7 @@ export interface WebSocketChannelEvent {
     name: string;
     description: string;
     isPrivate: boolean;
+    channelType: 'PUBLIC' | 'PRIVATE' | 'DM';
     workspaceId: number;
     topic?: string;
     archived?: boolean;

@@ -214,22 +214,25 @@ const channelSlice = createSlice({
       const channelData = action.payload;
       // Convert server data structure to our Channel type
       const channel = {
-        channelId: channelData.id, // Map id to channelId
+        channelId: channelData.id,
         name: channelData.name,
         workspaceId: channelData.workspaceId,
-        channelType: channelData.isPrivate ? 'PRIVATE' : 'PUBLIC',
+        channelType: channelData.channelType,
         description: channelData.description || '',
-        archived: false,
-        createdAt: new Date().toISOString(),
+        archived: channelData.archived || false,
+        createdAt: channelData.createdAt || new Date().toISOString(),
       };
 
+      // Check if channel already exists in either list
+      const channelExists = state.channels.some(c => c.channelId === channel.channelId);
+      const dmExists = state.dms.some(d => d.channelId === channel.channelId);
+
+      // Add to appropriate list if it doesn't exist
       if (channel.channelType === 'DM') {
-        const dmExists = state.dms.some(d => d.channelId === channel.channelId);
         if (!dmExists) {
           state.dms.push(channel);
         }
       } else {
-        const channelExists = state.channels.some(c => c.channelId === channel.channelId);
         if (!channelExists) {
           state.channels.push(channel);
         }
@@ -348,9 +351,21 @@ const channelSlice = createSlice({
         state.error = action.payload as string || 'Failed to create direct message';
       })
       .addCase(handleChannelCreated, (state, action) => {
-        // Only add the channel if it doesn't already exist
-        if (!state.channels.some(channel => channel.channelId === action.payload.channelId)) {
-          state.channels.push(action.payload);
+        const channelData = action.payload;
+        const channel = {
+          ...channelData,
+          channelId: channelData.id,
+          channelType: channelData.channelType || (channelData.isPrivate ? 'PRIVATE' : 'PUBLIC'),
+        };
+        
+        if (channel.channelType === 'DM') {
+          if (!state.dms.some(dm => dm.channelId === channel.channelId)) {
+            state.dms.push(channel);
+          }
+        } else {
+          if (!state.channels.some(c => c.channelId === channel.channelId)) {
+            state.channels.push(channel);
+          }
         }
       });
   },

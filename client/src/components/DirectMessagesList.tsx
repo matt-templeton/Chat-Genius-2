@@ -151,7 +151,7 @@ export function DirectMessagesList() {
 
       {/* DM List */}
       {isExpanded && dms.map((dm) => (
-        <TooltipProvider key={dm.channelId}>
+        <TooltipProvider key={`dm-${dm.channelId}`}>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

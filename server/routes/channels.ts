@@ -462,6 +462,7 @@ function broadcastChannelEvent(channel: any, eventType: 'CHANNEL_CREATED' | 'CHA
         name: channel.name,
         description: channel.topic ?? undefined,
         isPrivate: channel.channelType === 'PRIVATE',
+        channelType: channel.channelType,
         workspaceId: channel.workspaceId,
         createdAt: channel.createdAt.toISOString(),
         updatedAt: channel.updatedAt.toISOString(),

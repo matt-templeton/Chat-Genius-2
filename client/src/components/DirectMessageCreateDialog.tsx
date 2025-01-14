@@ -99,17 +99,10 @@ export function DirectMessageCreateDialog({
         throw new Error("Selected member not found");
       }
 
-      console.log('Creating DM with member:', {
-        displayName: selectedMember.value,
-        userId: selectedMember.userId
-      });
-
       const result = await dispatch(createDirectMessage({ 
         workspaceId, 
         participants: [selectedMember.userId]
       })).unwrap();
-
-      console.log('Created DM channel:', result);
 
       toast({
         title: "Direct message created",
@@ -120,7 +113,6 @@ export function DirectMessageCreateDialog({
       onOpenChange(false);
       form.reset();
     } catch (error) {
-      console.error('Error creating DM:', error);
       toast({
         title: "Error creating direct message",
         description: error instanceof Error ? error.message : "Something went wrong",
