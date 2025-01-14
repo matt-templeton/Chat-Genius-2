@@ -1,11 +1,10 @@
-
 import { db } from "../db";
 import { users, workspaces, channels } from "../db/schema";
 import { eq, inArray } from "drizzle-orm";
 import "@jest/globals";
 
 // Increase test timeout for slower DB operations
-jest.setTimeout(30000);
+// jest.setTimeout(3000);
 
 // Global setup before all tests
 beforeAll(async () => {
@@ -28,7 +27,7 @@ beforeAll(async () => {
 
   // Extract workspace IDs from test users
   const workspaceIds = testUsers
-    .map(user => user.defaultWorkspace)
+    .map((user) => user.defaultWorkspace)
     .filter((id): id is number => id !== null);
 
   // Delete in correct order to maintain referential integrity
@@ -58,7 +57,7 @@ afterEach(async () => {
 
   // Extract workspace IDs from test users
   const workspaceIds = testUsers
-    .map(user => user.defaultWorkspace)
+    .map((user) => user.defaultWorkspace)
     .filter((id): id is number => id !== null);
 
   // Delete in correct order to maintain referential integrity
@@ -88,9 +87,9 @@ afterAll(async () => {
 
   // Extract workspace IDs from test users
   const workspaceIds = testUsers
-    .map(user => user.defaultWorkspace)
+    .map((user) => user.defaultWorkspace)
     .filter((id): id is number => id !== null);
-  
+
   // Delete in correct order to maintain referential integrity
   await db.delete(channels).where(inArray(channels.workspaceId, workspaceIds));
   await db

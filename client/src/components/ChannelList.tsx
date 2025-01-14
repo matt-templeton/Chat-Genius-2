@@ -14,12 +14,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { 
-  handleChannelCreated, 
-  handleChannelUpdated, 
+import {
+  handleChannelCreated,
+  handleChannelUpdated,
   handleChannelArchived,
   fetchChannels,
-  setCurrentChannel
+  setCurrentChannel,
 } from "@/store/channelSlice";
 
 export function ChannelList() {
@@ -28,31 +28,38 @@ export function ChannelList() {
   const dispatch = useAppDispatch();
   const [, setLocation] = useLocation();
 
-  const currentWorkspace = useAppSelector(state => state.workspace.currentWorkspace);
-  const { channels, loading, currentChannel } = useAppSelector(state => state.channel);
+  const currentWorkspace = useAppSelector(
+    (state) => state.workspace.currentWorkspace,
+  );
+  const { channels, loading, currentChannel } = useAppSelector(
+    (state) => state.channel,
+  );
 
   // Memoize the WebSocket event handler
-  const handleWebSocketEvent = useCallback((event: any) => {
-    if (!currentWorkspace) return;
+  const handleWebSocketEvent = useCallback(
+    (event: any) => {
+      if (!currentWorkspace) return;
 
-    switch (event.type) {
-      case 'CHANNEL_CREATED':
-        if (event.workspaceId === currentWorkspace.workspaceId) {
-          dispatch(handleChannelCreated(event.channel));
-        }
-        break;
-      case 'CHANNEL_UPDATED':
-        if (event.workspaceId === currentWorkspace.workspaceId) {
-          dispatch(handleChannelUpdated(event.channel));
-        }
-        break;
-      case 'CHANNEL_ARCHIVED':
-        if (event.workspaceId === currentWorkspace.workspaceId) {
-          dispatch(handleChannelArchived(event.channel.id));
-        }
-        break;
-    }
-  }, [currentWorkspace, dispatch]);
+      switch (event.type) {
+        case "CHANNEL_CREATED":
+          if (event.workspaceId === currentWorkspace.workspaceId) {
+            dispatch(handleChannelCreated(event.data));
+          }
+          break;
+        case "CHANNEL_UPDATED":
+          if (event.workspaceId === currentWorkspace.workspaceId) {
+            dispatch(handleChannelUpdated(event.data));
+          }
+          break;
+        case "CHANNEL_ARCHIVED":
+          if (event.workspaceId === currentWorkspace.workspaceId) {
+            dispatch(handleChannelArchived(event.data.id));
+          }
+          break;
+      }
+    },
+    [currentWorkspace, dispatch],
+  );
 
   // Setup WebSocket connection
   useWebSocket({
@@ -63,27 +70,37 @@ export function ChannelList() {
   // Fetch channels when workspace changes
   useEffect(() => {
     if (currentWorkspace?.workspaceId) {
-      dispatch(fetchChannels({ 
-        workspaceId: currentWorkspace.workspaceId, 
-        showArchived: false 
-      }));
+      dispatch(
+        fetchChannels({
+          workspaceId: currentWorkspace.workspaceId,
+          showArchived: false,
+        }),
+      );
     }
   }, [currentWorkspace?.workspaceId, dispatch]);
 
   // Set default channel (general) when channels are loaded
   useEffect(() => {
     if (channels.length > 0 && !currentChannel) {
-      const generalChannel = channels.find(c => c.name.toLowerCase() === 'general') || channels[0];
+      const generalChannel =
+        channels.find((c) => c.name.toLowerCase() === "general") || channels[0];
       if (generalChannel) {
         dispatch(setCurrentChannel(generalChannel));
-        setLocation(`/chat/${currentWorkspace?.workspaceId}/${generalChannel.channelId}`);
+        setLocation(
+          `/chat/${currentWorkspace?.workspaceId}/${generalChannel.channelId}`,
+        );
       }
     }
-  }, [channels, currentChannel, currentWorkspace?.workspaceId, dispatch, setLocation]);
-
+  }, [
+    channels,
+    currentChannel,
+    currentWorkspace?.workspaceId,
+    dispatch,
+    setLocation,
+  ]);
 
   const handleChannelSelect = (channelId: number) => {
-    const selectedChannel = channels.find(c => c.channelId === channelId);
+    const selectedChannel = channels.find((c) => c.channelId === channelId);
     if (selectedChannel) {
       dispatch(setCurrentChannel(selectedChannel));
       setLocation(`/chat/${currentWorkspace?.workspaceId}/${channelId}`);
@@ -108,7 +125,7 @@ export function ChannelList() {
     );
   }
 
-  const activeChannels = channels.filter(channel => !channel.archived);
+  const activeChannels = channels.filter((channel) => !channel.archived);
 
   return (
     <div className="space-y-1 p-3">
@@ -129,8 +146,8 @@ export function ChannelList() {
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="sm"
                 className="h-auto p-0 font-semibold text-sm hover:bg-transparent"
               >
@@ -155,26 +172,27 @@ export function ChannelList() {
       />
 
       {/* Channel List */}
-      {isExpanded && activeChannels.map((channel) => (
-        <Button
-          key={channel.channelId}
-          variant="ghost"
-          size="sm"
-          className={cn(
-            "w-full justify-start px-2 gap-2",
-            "hover:bg-accent hover:text-accent-foreground",
-            currentChannel?.channelId === channel.channelId && "bg-accent/50"
-          )}
-          onClick={() => handleChannelSelect(channel.channelId)}
-        >
-          {channel.channelType === 'PRIVATE' ? (
-            <Lock className="h-4 w-4" />
-          ) : (
-            <Hash className="h-4 w-4" />
-          )}
-          <span className="truncate">{channel.name}</span>
-        </Button>
-      ))}
+      {isExpanded &&
+        activeChannels.map((channel) => (
+          <Button
+            key={channel.channelId}
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "w-full justify-start px-2 gap-2",
+              "hover:bg-accent hover:text-accent-foreground",
+              currentChannel?.channelId === channel.channelId && "bg-accent/50",
+            )}
+            onClick={() => handleChannelSelect(channel.channelId)}
+          >
+            {channel.channelType === "PRIVATE" ? (
+              <Lock className="h-4 w-4" />
+            ) : (
+              <Hash className="h-4 w-4" />
+            )}
+            <span className="truncate">{channel.name}</span>
+          </Button>
+        ))}
       {isExpanded && activeChannels.length === 0 && (
         <div className="px-2 py-1.5 text-sm text-muted-foreground">
           No channels found

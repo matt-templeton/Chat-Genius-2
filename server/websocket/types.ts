@@ -1,4 +1,4 @@
-import type { WebSocket } from 'ws';
+import type { WebSocket } from "ws";
 
 /**
  * WebSocket event types for channel-related events

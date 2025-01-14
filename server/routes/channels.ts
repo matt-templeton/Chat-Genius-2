@@ -457,7 +457,7 @@ function broadcastChannelEvent(channel: any, eventType: 'CHANNEL_CREATED' | 'CHA
     wsManager.broadcastToWorkspace(channel.workspaceId, {
       type: eventType,
       workspaceId: channel.workspaceId,
-      channel: {
+      data: {
         id: channel.channelId,
         name: channel.name,
         description: channel.topic ?? undefined,
