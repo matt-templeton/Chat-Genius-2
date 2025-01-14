@@ -13,6 +13,19 @@ interface MessageInputProps {
   workspaceId: number;
 }
 
+interface WebSocketMessageEvent {
+  type: "MESSAGE_CREATED";
+  workspaceId: number;
+  data: {
+    channelId: number;
+    messageId: number;
+    content: string;
+    userId: number;
+    workspaceId: number;
+    createdAt: string;
+  };
+}
+
 export function MessageInput({ channelId, workspaceId }: MessageInputProps) {
   const [message, setMessage] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -22,9 +35,14 @@ export function MessageInput({ channelId, workspaceId }: MessageInputProps) {
 
   const { send } = useWebSocket({
     workspaceId,
-    onMessageEvent: (event) => {
+    onMessageEvent: (event: WebSocketMessageEvent) => {
+      console.log("MessageInput received event:", event);
       if (event.type === "MESSAGE_CREATED" && event.data.channelId === channelId) {
-        queryClient.invalidateQueries({ queryKey: [`/api/v1/channels/${channelId}/messages`] });
+        console.log("Invalidating messages query for channel:", channelId);
+        queryClient.invalidateQueries({ 
+          queryKey: [`/api/v1/channels/${channelId}/messages`],
+          exact: true 
+        });
       }
     },
   });
@@ -38,17 +56,7 @@ export function MessageInput({ channelId, workspaceId }: MessageInputProps) {
         content: message 
       })).unwrap();
 
-      // Clear the input on success
       setMessage("");
-
-      // Broadcast message through WebSocket
-      send({
-        type: "MESSAGE_CREATED",
-        data: {
-          channelId,
-          ...result,
-        },
-      });
 
       // Invalidate messages query to refresh the list
       queryClient.invalidateQueries({ queryKey: [`/api/v1/channels/${channelId}/messages`] });
@@ -58,7 +66,6 @@ export function MessageInput({ channelId, workspaceId }: MessageInputProps) {
         description: error instanceof Error ? error.message : "Failed to send message",
         variant: "destructive",
       });
-      console.error("Failed to send message:", error);
     }
   };
 

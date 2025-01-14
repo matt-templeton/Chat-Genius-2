@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { loginUser } from "@/store/slices/auth-slice";
 import { useToast } from "@/hooks/use-toast";
+import { useEffect } from "react";
 
 const formSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -23,9 +24,15 @@ const formSchema = z.object({
 
 export default function LoginPage() {
   const dispatch = useAppDispatch();
-  const { loading, error } = useAppSelector((state) => state.auth);
+  const { isAuthenticated, loading, error } = useAppSelector((state) => state.auth);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      setLocation('/chat');
+    }
+  }, [isAuthenticated, setLocation]);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),

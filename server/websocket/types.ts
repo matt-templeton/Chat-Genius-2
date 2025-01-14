@@ -3,20 +3,12 @@ import type { WebSocket } from 'ws';
 /**
  * WebSocket event types for channel-related events
  */
-export type ChannelEvent = {
-  type: 'CHANNEL_CREATED' | 'CHANNEL_UPDATED' | 'CHANNEL_ARCHIVED';
+export interface ChannelEvent {
+  type: string;
   workspaceId: number;
-  channel: {
-    id: number;
-    name: string;
-    description?: string;
-    isPrivate: boolean;
-    workspaceId: number;
-    createdAt: string;
-    updatedAt: string;
-    archived: boolean;
-  };
-};
+  data?: any;
+  timestamp?: string;
+}
 
 /**
  * WebSocket client data structure

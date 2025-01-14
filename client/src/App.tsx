@@ -9,6 +9,7 @@ import LoginPage from "@/pages/login";
 import ChatPage from "@/pages/chat";
 import SignupPage from "@/pages/signup";
 import React from "react";
+import { AuthProvider } from "./components/AuthProvider";
 
 function Router() {
   return (
@@ -40,8 +41,10 @@ function App() {
   return (
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>
-        <Router />
-        <Toaster />
+        <AuthProvider>
+          <Router />
+          <Toaster />
+        </AuthProvider>
       </QueryClientProvider>
     </Provider>
   );

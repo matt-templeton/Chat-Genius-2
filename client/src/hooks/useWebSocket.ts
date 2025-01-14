@@ -4,11 +4,13 @@ import { useToast } from "@/hooks/use-toast";
 interface WebSocketOptions {
   workspaceId: number;
   onChannelEvent?: (event: any) => void;
+  onMessageEvent?: (event: any) => void;
 }
 
 export function useWebSocket({
   workspaceId,
   onChannelEvent,
+  onMessageEvent,
 }: WebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -18,6 +20,8 @@ export function useWebSocket({
 
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const { toast } = useToast();
+
+  const [isConnected, setIsConnected] = useState(false);
 
   const connect = useCallback(() => {
     if (
@@ -47,12 +51,15 @@ export function useWebSocket({
       ws.onopen = () => {
         console.log("WebSocket connected to workspace:", workspaceId);
         setIsConnecting(false);
+        setIsConnected(true);
         connections.current = 1;
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          console.log("WebSocket received message:", data);
+
           if (
             onChannelEvent &&
             ["CHANNEL_CREATED", "CHANNEL_UPDATED", "CHANNEL_ARCHIVED"].includes(
@@ -60,6 +67,9 @@ export function useWebSocket({
             )
           ) {
             onChannelEvent(data);
+          } else if (onMessageEvent && data.type === "MESSAGE_CREATED") {
+            console.log("Handling MESSAGE_CREATED event:", data);
+            onMessageEvent(data);
           }
         } catch (error) {
           console.error("Error parsing WebSocket message:", error);
@@ -72,6 +82,7 @@ export function useWebSocket({
 
       ws.onclose = () => {
         setIsConnecting(false);
+        setIsConnected(false);
         wsRef.current = null;
 
         if (reconnectAttempts.current < maxReconnectAttempts) {
@@ -94,7 +105,7 @@ export function useWebSocket({
       setIsConnecting(false);
       console.error("WebSocket connection error:", error);
     }
-  }, [workspaceId, onChannelEvent]);
+  }, [workspaceId, onChannelEvent, onMessageEvent]);
 
   useEffect(() => {
     connect();
@@ -118,5 +129,6 @@ export function useWebSocket({
         wsRef.current.send(JSON.stringify(message));
       }
     }, []),
+    isConnected,
   };
 }

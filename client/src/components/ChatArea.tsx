@@ -9,6 +9,9 @@ import { Separator } from "@/components/ui/separator";
 import { Paperclip, Smile, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { queryClient } from "@/lib/queryClient";
+import { useAppDispatch } from "@/store";
+import { createMessage } from "@/store/messageSlice";
+import { Message } from "@/types/message";
 
 interface Message {
   messageId: number;
@@ -29,10 +32,25 @@ interface Channel {
   archived: boolean;
 }
 
+interface WebSocketMessageEvent {
+  type: "MESSAGE_CREATED";
+  workspaceId: number;
+  data: {
+    channelId: number;
+    messageId: number;
+    content: string;
+    userId: number;
+    workspaceId: number;
+    createdAt: string;
+  };
+}
+
 export function ChatArea() {
   const { workspaceId = "", channelId = "" } = useParams();
   const [message, setMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const dispatch = useAppDispatch();
+  const [realtimeMessages, setRealtimeMessages] = useState<Message[]>([]);
 
   // Fetch channel details
   const { data: channel } = useQuery<Channel>({
@@ -41,21 +59,58 @@ export function ChatArea() {
   });
 
   // Fetch messages
-  const { data: messages = [] } = useQuery<Message[]>({
+  const { data: fetchedMessages = [] } = useQuery<Message[]>({
     queryKey: [`/api/v1/channels/${channelId}/messages`],
     enabled: Boolean(channelId),
   });
+
+  // Combine and sort messages by postedAt
+  const messages = [...fetchedMessages, ...realtimeMessages].sort(
+    (a, b) => new Date(a.postedAt).getTime() - new Date(b.postedAt).getTime()
+  );
+
+  // Reset realtime messages when channel changes
+  useEffect(() => {
+    setRealtimeMessages([]);
+  }, [channelId]);
 
   // WebSocket integration for real-time updates
   const { send } = useWebSocket({
     workspaceId: parseInt(workspaceId),
     onChannelEvent: (event) => {
       if (event.type === "CHANNEL_CREATED" || event.type === "CHANNEL_UPDATED" || event.type === "CHANNEL_ARCHIVED") {
-        // Only invalidate the messages query if it's the current channel
         if (event.channel.id === parseInt(channelId)) {
-          void queryClient.invalidateQueries({
+          queryClient.invalidateQueries({
             queryKey: [`/api/v1/channels/${channelId}/messages`],
+            exact: true
           });
+        }
+      }
+    },
+    onMessageEvent: (event: WebSocketMessageEvent) => {
+      console.log("ChatArea received message event:", event);
+      if (event.type === "MESSAGE_CREATED" && 
+          event.data.channelId === parseInt(channelId) && 
+          event.workspaceId === parseInt(workspaceId)) {
+        
+        // Convert the WebSocket message to a Message type
+        const newMessage: Message = {
+          messageId: event.data.messageId,
+          channelId: event.data.channelId,
+          workspaceId: event.data.workspaceId,
+          userId: event.data.userId,
+          content: event.data.content,
+          postedAt: event.data.createdAt,
+          createdAt: event.data.createdAt,
+          updatedAt: event.data.createdAt,
+          deleted: false
+        };
+
+        // Check if message already exists in either fetched or realtime messages
+        const messageExists = messages.some(m => m.messageId === newMessage.messageId);
+        
+        if (!messageExists) {
+          setRealtimeMessages(prev => [...prev, newMessage]);
         }
       }
     },
@@ -70,27 +125,27 @@ export function ChatArea() {
     if (!message.trim()) return;
 
     try {
-      const response = await fetch(
-        `/api/v1/channels/${channelId}/messages`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ content: message }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to send message");
-      }
+      const result = await dispatch(createMessage({ 
+        channelId: parseInt(channelId), 
+        content: message 
+      })).unwrap();
 
       setMessage("");
 
-      // Invalidate messages query after successful send
-      void queryClient.invalidateQueries({
-        queryKey: [`/api/v1/channels/${channelId}/messages`],
-      });
+      // Add the sent message to realtime messages
+      const newMessage: Message = {
+        messageId: result.messageId,
+        channelId: result.channelId,
+        workspaceId: result.workspaceId,
+        userId: result.userId,
+        content: result.content,
+        postedAt: result.createdAt,
+        createdAt: result.createdAt,
+        updatedAt: result.updatedAt,
+        deleted: false
+      };
+
+      setRealtimeMessages(prev => [...prev, newMessage]);
     } catch (error) {
       console.error("Error sending message:", error);
     }

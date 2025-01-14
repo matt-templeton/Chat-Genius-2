@@ -206,7 +206,14 @@ router.post("/login", async (req: Request, res: Response) => {
       .set({ lastLogin: new Date() })
       .where(eq(users.userId, user.userId));
 
-    res.json(tokens);
+    res.json({
+      ...tokens,
+      user: {
+        id: user.userId,
+        email: user.email,
+        displayName: user.displayName,
+      },
+    });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({
@@ -310,6 +317,56 @@ router.post("/verify-email", async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: {
+        code: "SERVER_ERROR",
+        message: "An unexpected error occurred",
+      },
+    });
+  }
+});
+
+/**
+ * @route GET /auth/validate
+ * @desc Validate token and return user info
+ */
+router.get("/validate", isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({
+        error: "Invalid Token",
+        details: {
+          code: "INVALID_TOKEN",
+          message: "No valid session found",
+        },
+      });
+    }
+
+    // Get fresh user data from database
+    const user = await db.query.users.findFirst({
+      where: eq(users.userId, req.user.userId),
+    });
+
+    if (!user) {
+      return res.status(401).json({
+        error: "Invalid Token",
+        details: {
+          code: "INVALID_TOKEN",
+          message: "User not found",
+        },
+      });
+    }
+
+    res.json({
+      user: {
+        id: user.userId,
+        email: user.email,
+        displayName: user.displayName,
+      },
+    });
+  } catch (error) {
+    console.error("Token validation error:", error);
     res.status(500).json({
       error: "Internal Server Error",
       details: {

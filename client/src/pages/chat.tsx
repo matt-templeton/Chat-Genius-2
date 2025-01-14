@@ -7,16 +7,16 @@ import { ChatsSidebar } from "@/components/ChatsSidebar";
 import { ChatArea } from "@/components/ChatArea";
 
 export default function ChatPage() {
-  const { isAuthenticated } = useAppSelector((state) => state.auth);
+  const { isAuthenticated, loading } = useAppSelector((state) => state.auth);
   const [, setLocation] = useLocation();
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!loading && !isAuthenticated) {
       setLocation("/login");
     }
-  }, [isAuthenticated, setLocation]);
+  }, [isAuthenticated, loading, setLocation]);
 
-  if (!isAuthenticated) {
+  if (loading || !isAuthenticated) {
     return null;
   }
 

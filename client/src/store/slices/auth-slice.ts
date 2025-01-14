@@ -53,6 +53,37 @@ export const loginUser = createAsyncThunk(
   }
 );
 
+export const validateToken = createAsyncThunk(
+  'auth/validateToken',
+  async (_, { rejectWithValue }) => {
+    try {
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) {
+        return rejectWithValue('No token found');
+      }
+
+      const response = await fetch('/api/v1/auth/validate', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        localStorage.removeItem('accessToken');
+        throw new Error('Invalid token');
+      }
+
+      const data = await response.json();
+      return data.user;
+    } catch (error) {
+      localStorage.removeItem('accessToken');
+      return rejectWithValue(error instanceof Error ? error.message : 'Session expired');
+    }
+  }
+);
+
 const authSlice = createSlice({
   name: 'auth',
   initialState,
@@ -87,6 +118,22 @@ const authSlice = createSlice({
         state.user = null;
         // Clear token on failed login
         localStorage.removeItem('accessToken');
+      })
+      .addCase(validateToken.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(validateToken.fulfilled, (state, action: PayloadAction<User>) => {
+        state.isAuthenticated = true;
+        state.user = action.payload;
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(validateToken.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+        state.isAuthenticated = false;
+        state.user = null;
       });
   },
 });

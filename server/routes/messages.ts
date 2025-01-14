@@ -5,6 +5,7 @@ import { eq, and, desc, lt } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
 import { z } from 'zod';
+import { getWebSocketManager } from '../websocket/WebSocketManager';
 
 const router = Router();
 
@@ -91,6 +92,20 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
         updatedAt: now
       })
       .returning();
+    console.log("Message created:", message);
+    const wsManager = getWebSocketManager();
+    wsManager.broadcastToWorkspace(channel.workspaceId, {
+      type: "MESSAGE_CREATED",
+      workspaceId: channel.workspaceId,
+      data: {
+        messageId: message.messageId,
+        channelId: message.channelId,
+        content: message.content,
+        userId: message.userId,
+        workspaceId: message.workspaceId,
+        createdAt: message.createdAt.toISOString(),
+      }
+    });
 
     res.status(201).json(message);
   } catch (error) {
