@@ -20,20 +20,37 @@ const request = supertest(app);
 describe("Auth Endpoints", () => {
   describe("POST /api/v1/auth/register", () => {
     it("should create a new user when valid data is provided", async () => {
-      console.log("HERE");
+      // Clear any existing test data
+      await db.delete(userWorkspaces).where(eq(userWorkspaces.userId, 1));
+      await db.delete(users).where(eq(users.email, "test@example.com"));
 
       const response = await request.post("/api/v1/auth/register").send({
         email: "test@example.com",
         password: "TestPassword123!",
         displayName: "Test User",
       });
+
       expect(response.status).toBe(201);
-      console.log("NOW HERE");
       expect(response.body).toHaveProperty(
         "message",
         "User created successfully",
       );
       expect(response.body).not.toHaveProperty("passwordHash");
+
+      // Verify the user and workspace were created properly
+      const user = await db.query.users.findFirst({
+        where: eq(users.email, "test@example.com"),
+      });
+      expect(user).toBeDefined();
+      expect(user?.defaultWorkspace).toBeDefined();
+
+      const userWorkspace = await db.query.userWorkspaces.findFirst({
+        where: and(
+          eq(userWorkspaces.userId, user!.userId),
+          eq(userWorkspaces.workspaceId, user!.defaultWorkspace!)
+        ),
+      });
+      expect(userWorkspace).toBeDefined();
     });
 
     //   it("should return 400 when email is invalid", async () => {
