@@ -1,10 +1,11 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { WebSocketEvent } from '@/types/websocket';
 
 interface WebSocketOptions {
   workspaceId: number;
-  onChannelEvent?: (event: any) => void;
-  onMessageEvent?: (event: any) => void;
+  onChannelEvent?: (event: WebSocketChannelEvent) => void;
+  onMessageEvent?: (event: WebSocketMessageEvent) => void;
 }
 
 export function useWebSocket({
@@ -49,11 +50,12 @@ export function useWebSocket({
 
       ws.onmessage = (event) => {
         try {
-          const data = JSON.parse(event.data);
+          const data = JSON.parse(event.data) as WebSocketEvent;
+          
           if (onChannelEvent && ["CHANNEL_CREATED", "CHANNEL_UPDATED", "CHANNEL_ARCHIVED"].includes(data.type)) {
-            onChannelEvent(data);
+            onChannelEvent(data as WebSocketChannelEvent);
           } else if (onMessageEvent && data.type === "MESSAGE_CREATED") {
-            onMessageEvent(data);
+            onMessageEvent(data as WebSocketMessageEvent);
           }
         } catch (error) {
           console.error("Error parsing WebSocket message:", error);

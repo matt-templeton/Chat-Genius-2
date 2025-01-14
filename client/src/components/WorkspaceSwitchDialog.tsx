@@ -19,6 +19,8 @@ import { Check, PlusCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppSelector, useAppDispatch } from "@/store";
 import { setCurrentWorkspace } from "@/store/workspaceSlice";
+import { useLocation } from "wouter";
+import { fetchChannels, setCurrentChannel } from "@/store/channelSlice";
 
 interface WorkspaceSwitchDialogProps {
   isOpen: boolean;
@@ -41,6 +43,7 @@ export function WorkspaceSwitchDialog({
   onCreateNew 
 }: WorkspaceSwitchDialogProps) {
   const dispatch = useAppDispatch();
+  const [, setLocation] = useLocation();
   const currentWorkspace = useAppSelector(state => state.workspace.currentWorkspace);
 
   const { data: workspaces = [], isLoading } = useQuery<Workspace[]>({
@@ -48,8 +51,33 @@ export function WorkspaceSwitchDialog({
     enabled: isOpen,
   });
 
-  const handleSelect = (workspace: Workspace) => {
+  const handleSelect = async (workspace: Workspace) => {
     dispatch(setCurrentWorkspace(workspace));
+    
+    try {
+      const channels = await dispatch(fetchChannels({ 
+        workspaceId: workspace.workspaceId,
+        showArchived: false 
+      })).unwrap();
+      
+      const generalChannel = channels.find(
+        channel => channel.name.toLowerCase() === 'general'
+      );
+
+      if (generalChannel) {
+        dispatch(setCurrentChannel(generalChannel));
+        setLocation(`/chat/${workspace.workspaceId}/${generalChannel.channelId}`);
+      } else {
+        console.warn('No general channel found in workspace:', workspace.name);
+        if (channels.length > 0) {
+          dispatch(setCurrentChannel(channels[0]));
+          setLocation(`/chat/${workspace.workspaceId}/${channels[0].channelId}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error switching workspace:', error);
+    }
+
     onOpenChange(false);
   };
 

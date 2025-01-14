@@ -211,23 +211,28 @@ const channelSlice = createSlice({
       state.error = null;
     },
     handleChannelCreated: (state, action) => {
-      const channel = action.payload;
+      const channelData = action.payload;
+      // Convert server data structure to our Channel type
+      const channel = {
+        channelId: channelData.id, // Map id to channelId
+        name: channelData.name,
+        workspaceId: channelData.workspaceId,
+        channelType: channelData.isPrivate ? 'PRIVATE' : 'PUBLIC',
+        description: channelData.description || '',
+        archived: false,
+        createdAt: new Date().toISOString(),
+      };
+
       if (channel.channelType === 'DM') {
-        // Add to DMs if it's a DM channel
         const dmExists = state.dms.some(d => d.channelId === channel.channelId);
         if (!dmExists) {
           state.dms.push(channel);
         }
       } else {
-        // Add to regular channels if it's not a DM
         const channelExists = state.channels.some(c => c.channelId === channel.channelId);
         if (!channelExists) {
           state.channels.push(channel);
         }
-      }
-      // Update current channel if needed
-      if (state.currentChannel?.channelId === channel.channelId) {
-        state.currentChannel = channel;
       }
     },
     handleChannelUpdated: (state, action) => {
@@ -285,7 +290,7 @@ const channelSlice = createSlice({
       })
       .addCase(fetchChannels.fulfilled, (state, action) => {
         state.loading = false;
-        state.channels = action.payload.filter(channel => channel.channelType !== 'DM');
+        state.channels = action.payload.filter((channel: Channel) => channel.channelType !== 'DM');
         state.error = null;
       })
       .addCase(fetchChannels.rejected, (state, action) => {
@@ -298,6 +303,12 @@ const channelSlice = createSlice({
       })
       .addCase(createChannel.fulfilled, (state, action) => {
         state.loading = false;
+        if (action.payload && action.payload.channelId) {
+          const exists = state.channels.some(c => c.channelId === action.payload.channelId);
+          if (!exists) {
+            state.channels.push(action.payload);
+          }
+        }
         state.error = null;
       })
       .addCase(createChannel.rejected, (state, action) => {
@@ -335,6 +346,12 @@ const channelSlice = createSlice({
       .addCase(createDirectMessage.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string || 'Failed to create direct message';
+      })
+      .addCase(handleChannelCreated, (state, action) => {
+        // Only add the channel if it doesn't already exist
+        if (!state.channels.some(channel => channel.channelId === action.payload.channelId)) {
+          state.channels.push(action.payload);
+        }
       });
   },
 });

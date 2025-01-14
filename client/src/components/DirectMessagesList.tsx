@@ -21,6 +21,18 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 
+interface WebSocketChannelEvent {
+  type: "CHANNEL_CREATED" | "CHANNEL_UPDATED" | "CHANNEL_ARCHIVED";
+  workspaceId: number;
+  data: {
+    channelId: number;
+    name: string;
+    channelType: 'PUBLIC' | 'PRIVATE' | 'DM';
+    workspaceId: number;
+    // Add other channel properties as needed
+  };
+}
+
 const useCurrentUser = () => {
   return parseInt(localStorage.getItem('userId') || '0');
 };
@@ -36,13 +48,16 @@ export function DirectMessagesList() {
   const currentUserId = useCurrentUser();
 
   // Memoize the WebSocket event handler
-  const handleWebSocketEvent = useCallback((event: any) => {
+  const handleWebSocketEvent = useCallback((event: WebSocketChannelEvent) => {
     if (!currentWorkspace) return;
 
     switch (event.type) {
-      case 'CHANNEL_CREATED':
-        if (event.workspaceId === currentWorkspace.workspaceId && event.channel.channelType === 'DM') {
-          dispatch(handleDirectMessageCreated(event.channel));
+      case "CHANNEL_CREATED":
+        if (
+          event.workspaceId === currentWorkspace.workspaceId && 
+          event.data?.channelType === 'DM'
+        ) {
+          dispatch(handleDirectMessageCreated(event.data));
         }
         break;
     }

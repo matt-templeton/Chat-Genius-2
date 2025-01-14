@@ -1,4 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import { fetchChannels, setCurrentChannel } from "@/store/channelSlice";
 
 export interface Workspace {
   workspaceId: number;
@@ -55,7 +56,7 @@ export const fetchWorkspaces = createAsyncThunk(
 
 export const createWorkspace = createAsyncThunk(
   "workspace/createWorkspace",
-  async (workspace: { name: string }, { rejectWithValue }) => {
+  async (workspace: { name: string }, { dispatch, rejectWithValue }) => {
     try {
       const token = localStorage.getItem('accessToken');
       if (!token) {
@@ -78,6 +79,22 @@ export const createWorkspace = createAsyncThunk(
       }
 
       const data = await response.json();
+      
+      // After creating the workspace, fetch its channels
+      const channels = await dispatch(fetchChannels({ 
+        workspaceId: data.workspaceId,
+        showArchived: false 
+      })).unwrap();
+
+      // Find the general channel
+      const generalChannel = channels.find(
+        channel => channel.name.toLowerCase() === 'general'
+      );
+
+      if (generalChannel) {
+        dispatch(setCurrentChannel(generalChannel));
+      }
+
       return data;
     } catch (error) {
       console.error("Error in createWorkspace:", error);

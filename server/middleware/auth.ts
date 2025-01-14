@@ -141,26 +141,36 @@ async function validateJwtToken(req: Request): Promise<boolean> {
 }
 
 // Middleware to check if user is authenticated via session or JWT
-export const isAuthenticated = async (req: Request, res: Response, next: NextFunction) => {
-  // First check session authentication
-  if (req.isAuthenticated()) {
-    return next();
-  }
-
-  // Then check JWT token
-  const isValidToken = await validateJwtToken(req);
-  if (isValidToken) {
-    return next();
-  }
-
-  // If neither authentication method is valid, return unauthorized
-  res.status(401).json({
-    error: "Unauthorized",
-    details: {
-      code: "UNAUTHORIZED",
-      message: "Authentication required"
+export const isAuthenticated = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'No token provided' });
     }
-  });
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET) as { userId: number };
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.userId, decoded.userId),
+    });
+
+    if (!user) {
+      return res.status(401).json({ message: 'User not found' });
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      return res.status(401).json({ message: 'Token expired' });
+    }
+    return res.status(401).json({ message: 'Invalid token' });
+  }
 };
 
 export default passport;

@@ -22,6 +22,17 @@ import {
   setCurrentChannel,
 } from "@/store/channelSlice";
 
+interface WebSocketChannelEvent {
+  type: "CHANNEL_CREATED" | "CHANNEL_UPDATED" | "CHANNEL_ARCHIVED";
+  workspaceId: number;
+  data: {
+    channelId: number;
+    name: string;
+    channelType: 'PUBLIC' | 'PRIVATE' | 'DM';
+    workspaceId: number;
+  };
+}
+
 export function ChannelList() {
   const [isExpanded, setIsExpanded] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -36,30 +47,33 @@ export function ChannelList() {
   );
 
   // Memoize the WebSocket event handler
-  const handleWebSocketEvent = useCallback(
-    (event: any) => {
-      if (!currentWorkspace) return;
+  const handleWebSocketEvent = useCallback((event: WebSocketChannelEvent) => {
+    if (!currentWorkspace) return;
 
-      switch (event.type) {
-        case "CHANNEL_CREATED":
-          if (event.workspaceId === currentWorkspace.workspaceId) {
-            dispatch(handleChannelCreated(event.data));
-          }
-          break;
-        case "CHANNEL_UPDATED":
-          if (event.workspaceId === currentWorkspace.workspaceId) {
-            dispatch(handleChannelUpdated(event.data));
-          }
-          break;
-        case "CHANNEL_ARCHIVED":
-          if (event.workspaceId === currentWorkspace.workspaceId) {
-            dispatch(handleChannelArchived(event.data.id));
-          }
-          break;
-      }
-    },
-    [currentWorkspace, dispatch],
-  );
+    console.log('WebSocket event received:', event);
+
+    switch (event.type) {
+      case "CHANNEL_CREATED":
+        if (
+          event.workspaceId === currentWorkspace.workspaceId && 
+          event.data.channelType !== 'DM'
+        ) {
+          console.log('Dispatching handleChannelCreated with:', event.data);
+          dispatch(handleChannelCreated(event.data));
+        }
+        break;
+      case "CHANNEL_UPDATED":
+        if (event.workspaceId === currentWorkspace.workspaceId) {
+          dispatch(handleChannelUpdated(event.data));
+        }
+        break;
+      case "CHANNEL_ARCHIVED":
+        if (event.workspaceId === currentWorkspace.workspaceId) {
+          dispatch(handleChannelArchived(event.data.channelId));
+        }
+        break;
+    }
+  }, [currentWorkspace, dispatch]);
 
   // Setup WebSocket connection
   useWebSocket({
@@ -107,6 +121,13 @@ export function ChannelList() {
     }
   };
 
+  // Add this filter for active channels
+  const activeChannels = useAppSelector(state => 
+    state.channel.channels.filter(channel => 
+      channel && !channel.archived && channel.channelType !== 'DM'
+    )
+  );
+
   if (!currentWorkspace) {
     return (
       <div className="px-3 py-2 text-sm text-muted-foreground">
@@ -124,10 +145,6 @@ export function ChannelList() {
       </div>
     );
   }
-
-  const activeChannels = channels.filter(
-    channel => !channel.archived && channel.channelType !== 'DM'
-  );
 
   return (
     <div className="space-y-1 p-3">
@@ -174,10 +191,10 @@ export function ChannelList() {
       />
 
       {/* Channel List */}
-      {isExpanded &&
-        activeChannels.map((channel) => (
+      {isExpanded && activeChannels && activeChannels.map((channel) => (
+        channel && (
           <Button
-            key={channel.channelId}
+            key={channel.channelId.toString()}
             variant="ghost"
             size="sm"
             className={cn(
@@ -194,8 +211,9 @@ export function ChannelList() {
             )}
             <span className="truncate">{channel.name}</span>
           </Button>
-        ))}
-      {isExpanded && activeChannels.length === 0 && (
+        )
+      ))}
+      {isExpanded && (!activeChannels || activeChannels.length === 0) && (
         <div className="px-2 py-1.5 text-sm text-muted-foreground">
           No channels found
         </div>
