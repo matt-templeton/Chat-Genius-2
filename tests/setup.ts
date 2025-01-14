@@ -1,4 +1,5 @@
 declare global {
+  var server: any;
   namespace NodeJS {
     interface Global {
       server: any;
