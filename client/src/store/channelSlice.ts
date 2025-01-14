@@ -212,36 +212,58 @@ const channelSlice = createSlice({
     },
     handleChannelCreated: (state, action) => {
       const channel = action.payload;
-      // Only add to channels if it's not a DM
-      if (channel.channelType !== 'DM') {
+      if (channel.channelType === 'DM') {
+        // Add to DMs if it's a DM channel
+        const dmExists = state.dms.some(d => d.channelId === channel.channelId);
+        if (!dmExists) {
+          state.dms.push(channel);
+        }
+      } else {
+        // Add to regular channels if it's not a DM
         const channelExists = state.channels.some(c => c.channelId === channel.channelId);
         if (!channelExists) {
           state.channels.push(channel);
-          // Set as current if it matches
-          if (state.currentChannel?.channelId === channel.channelId) {
-            state.currentChannel = channel;
-          }
         }
+      }
+      // Update current channel if needed
+      if (state.currentChannel?.channelId === channel.channelId) {
+        state.currentChannel = channel;
       }
     },
     handleChannelUpdated: (state, action) => {
       const channel = action.payload;
-      const index = state.channels.findIndex(c => c.channelId === channel.channelId);
-      if (index !== -1) {
-        state.channels[index] = channel;
-        if (state.currentChannel?.channelId === channel.channelId) {
-          state.currentChannel = channel;
+      if (channel.channelType === 'DM') {
+        // Update in DMs list
+        const dmIndex = state.dms.findIndex(d => d.channelId === channel.channelId);
+        if (dmIndex !== -1) {
+          state.dms[dmIndex] = channel;
         }
+      } else {
+        // Update in channels list
+        const channelIndex = state.channels.findIndex(c => c.channelId === channel.channelId);
+        if (channelIndex !== -1) {
+          state.channels[channelIndex] = channel;
+        }
+      }
+      // Update current channel if needed
+      if (state.currentChannel?.channelId === channel.channelId) {
+        state.currentChannel = channel;
       }
     },
     handleChannelArchived: (state, action) => {
       const channelId = action.payload;
-      const index = state.channels.findIndex(c => c.channelId === channelId);
-      if (index !== -1) {
-        state.channels[index].archived = true;
-        if (state.currentChannel?.channelId === channelId) {
-          state.currentChannel = null;
-        }
+      // Check both channels and DMs
+      const channelIndex = state.channels.findIndex(c => c.channelId === channelId);
+      const dmIndex = state.dms.findIndex(d => d.channelId === channelId);
+
+      if (channelIndex !== -1) {
+        state.channels[channelIndex].archived = true;
+      }
+      if (dmIndex !== -1) {
+        state.dms[dmIndex].archived = true;
+      }
+      if (state.currentChannel?.channelId === channelId) {
+        state.currentChannel = null;
       }
     },
     handleDirectMessageCreated: (state, action) => {
@@ -263,7 +285,7 @@ const channelSlice = createSlice({
       })
       .addCase(fetchChannels.fulfilled, (state, action) => {
         state.loading = false;
-        state.channels = action.payload;
+        state.channels = action.payload.filter(channel => channel.channelType !== 'DM');
         state.error = null;
       })
       .addCase(fetchChannels.rejected, (state, action) => {

@@ -52,7 +52,7 @@ export function DirectMessagesList() {
   // Fetch DMs when workspace changes
   useEffect(() => {
     if (currentWorkspace?.workspaceId) {
-      // dispatch(fetchDirectMessages({ workspaceId: currentWorkspace.workspaceId }));
+      dispatch(fetchDirectMessages({ workspaceId: currentWorkspace.workspaceId }));
     }
   }, [currentWorkspace?.workspaceId, dispatch]);
 

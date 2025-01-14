@@ -14,6 +14,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAppDispatch } from "@/store";
+import { loginUser } from "@/store/slices/auth-slice";
 
 const formSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -42,6 +44,7 @@ async function registerUser(userData: z.infer<typeof formSchema>) {
 export default function SignupPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const dispatch = useAppDispatch();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -54,12 +57,28 @@ export default function SignupPage() {
 
   const mutation = useMutation({
     mutationFn: registerUser,
-    onSuccess: () => {
-      toast({
-        title: "Success",
-        description: "Account created successfully. Please log in.",
-      });
-      setLocation("/login");
+    onSuccess: async (_, variables) => {
+      try {
+        // After successful registration, automatically log in
+        await dispatch(loginUser({
+          email: variables.email,
+          password: variables.password
+        })).unwrap();
+        
+        toast({
+          title: "Success",
+          description: "Account created and logged in successfully",
+        });
+        
+        setLocation("/chat");
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Account created but failed to log in automatically. Please log in manually.",
+        });
+        setLocation("/login");
+      }
     },
     onError: (error: Error) => {
       toast({

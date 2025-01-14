@@ -125,7 +125,9 @@ export function ChannelList() {
     );
   }
 
-  const activeChannels = channels.filter((channel) => !channel.archived);
+  const activeChannels = channels.filter(
+    channel => !channel.archived && channel.channelType !== 'DM'
+  );
 
   return (
     <div className="space-y-1 p-3">

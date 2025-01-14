@@ -19,6 +19,11 @@ const updateWorkspaceSchema = z.object({
   description: z.string().optional(),
 });
 
+// Add validation schema for member addition
+const addMemberSchema = z.object({
+  email: z.string().email("Invalid email address"),
+});
+
 /**
  * @route GET /workspaces
  * @desc List all workspaces that authenticated user is a member of
@@ -336,6 +341,119 @@ router.get('/:workspaceId/members', isAuthenticated, async (req: Request, res: R
       details: {
         code: "SERVER_ERROR",
         message: "Failed to fetch workspace members"
+      }
+    });
+  }
+});
+
+/**
+ * @route POST /workspaces/{workspaceId}/members
+ * @desc Add a member to workspace by email
+ */
+router.post('/:workspaceId/members', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
+
+    // Validate request body
+    const validationResult = addMemberSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid member data",
+          errors: validationResult.error.errors,
+        },
+      });
+    }
+
+    const { email } = validationResult.data;
+
+    // Check if requester is a member of the workspace
+    const requesterMembership = await db
+      .select()
+      .from(userWorkspaces)
+      .where(
+        and(
+          eq(userWorkspaces.workspaceId, parseInt(workspaceId)),
+          eq(userWorkspaces.userId, req.user!.userId)
+        )
+      )
+      .limit(1);
+
+    if (!requesterMembership.length) {
+      return res.status(403).json({
+        error: "Forbidden",
+        details: {
+          code: "NOT_WORKSPACE_MEMBER",
+          message: "You are not a member of this workspace"
+        }
+      });
+    }
+
+    // Find user by email
+    const [userToAdd] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (!userToAdd) {
+      return res.status(404).json({
+        error: "Not Found",
+        details: {
+          code: "EMAIL_NOT_FOUND",
+          message: "No user found with this email address"
+        }
+      });
+    }
+
+    // Check if user is already a member
+    const existingMembership = await db
+      .select()
+      .from(userWorkspaces)
+      .where(
+        and(
+          eq(userWorkspaces.workspaceId, parseInt(workspaceId)),
+          eq(userWorkspaces.userId, userToAdd.userId)
+        )
+      )
+      .limit(1);
+
+    if (existingMembership.length) {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: {
+          code: "ALREADY_MEMBER",
+          message: "User is already a member of this workspace"
+        }
+      });
+    }
+
+    // Add user to workspace
+    await db.insert(userWorkspaces).values({
+      userId: userToAdd.userId,
+      workspaceId: parseInt(workspaceId),
+      role: "MEMBER",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    res.status(201).json({
+      message: "Member added successfully",
+      member: {
+        userId: userToAdd.userId,
+        email: userToAdd.email,
+        displayName: userToAdd.displayName,
+      }
+    });
+  } catch (error) {
+    console.error('Error adding workspace member:', error);
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: {
+        code: "SERVER_ERROR",
+        message: "Failed to add member to workspace"
       }
     });
   }

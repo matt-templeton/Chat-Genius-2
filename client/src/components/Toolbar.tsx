@@ -2,13 +2,26 @@ import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLocation } from "wouter";
+import { useAppDispatch } from "@/store";
+import { logoutUser } from "@/store/slices/auth-slice";
+import { useToast } from "@/hooks/use-toast";
 
 export function Toolbar() {
   const [, setLocation] = useLocation();
+  const dispatch = useAppDispatch();
+  const { toast } = useToast();
 
-  const handleLogout = () => {
-    // TODO: Implement logout logic
-    setLocation('/login');
+  const handleLogout = async () => {
+    try {
+      await dispatch(logoutUser()).unwrap();
+      setLocation('/login');
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to logout",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
