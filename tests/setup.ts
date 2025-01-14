@@ -8,7 +8,7 @@ declare global {
 }
 
 import { db } from "../db";
-import { users, workspaces, channels } from "../db/schema";
+import { users, workspaces, channels, userWorkspaces } from "../db/schema";
 import { eq, inArray } from "drizzle-orm";
 import "@jest/globals";
 
@@ -42,6 +42,9 @@ beforeAll(async () => {
   // Delete in correct order to maintain referential integrity
   await db.delete(channels).where(inArray(channels.workspaceId, workspaceIds));
   await db
+    .delete(userWorkspaces)
+    .where(inArray(userWorkspaces.workspaceId, workspaceIds));
+  await db
     .delete(workspaces)
     .where(inArray(workspaces.workspaceId, workspaceIds));
   await db.delete(users).where(inArray(users.email, testEmails));
@@ -71,6 +74,9 @@ afterEach(async () => {
 
   // Delete in correct order to maintain referential integrity
   await db.delete(channels).where(inArray(channels.workspaceId, workspaceIds));
+  await db
+    .delete(userWorkspaces)
+    .where(inArray(userWorkspaces.workspaceId, workspaceIds));
   await db
     .delete(workspaces)
     .where(inArray(workspaces.workspaceId, workspaceIds));
@@ -104,6 +110,9 @@ afterAll(async () => {
   await db
     .delete(workspaces)
     .where(inArray(workspaces.workspaceId, workspaceIds));
+  await db
+    .delete(userWorkspaces)
+    .where(inArray(userWorkspaces.workspaceId, workspaceIds));
   await db.delete(users).where(inArray(users.email, testEmails));
 
   // Close any remaining server connections

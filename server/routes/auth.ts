@@ -131,7 +131,6 @@ router.post("/register", async (req: Request, res: Response) => {
         updatedAt: new Date(),
       })
       .returning();
-
     // Create userWorkspace record with OWNER role
     await db.insert(userWorkspaces).values({
       userId: user.userId,
@@ -331,50 +330,54 @@ router.post("/verify-email", async (req: Request, res: Response) => {
  * @route GET /auth/validate
  * @desc Validate token and return user info
  */
-router.get("/validate", isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({
-        error: "Invalid Token",
+router.get(
+  "/validate",
+  isAuthenticated,
+  async (req: Request, res: Response) => {
+    try {
+      if (!req.user) {
+        return res.status(401).json({
+          error: "Invalid Token",
+          details: {
+            code: "INVALID_TOKEN",
+            message: "No valid session found",
+          },
+        });
+      }
+
+      // Get fresh user data from database
+      const user = await db.query.users.findFirst({
+        where: eq(users.userId, req.user.userId),
+      });
+
+      if (!user) {
+        return res.status(401).json({
+          error: "Invalid Token",
+          details: {
+            code: "INVALID_TOKEN",
+            message: "User not found",
+          },
+        });
+      }
+
+      res.json({
+        user: {
+          id: user.userId,
+          email: user.email,
+          displayName: user.displayName,
+        },
+      });
+    } catch (error) {
+      console.error("Token validation error:", error);
+      res.status(500).json({
+        error: "Internal Server Error",
         details: {
-          code: "INVALID_TOKEN",
-          message: "No valid session found",
+          code: "SERVER_ERROR",
+          message: "An unexpected error occurred",
         },
       });
     }
-
-    // Get fresh user data from database
-    const user = await db.query.users.findFirst({
-      where: eq(users.userId, req.user.userId),
-    });
-
-    if (!user) {
-      return res.status(401).json({
-        error: "Invalid Token",
-        details: {
-          code: "INVALID_TOKEN",
-          message: "User not found",
-        },
-      });
-    }
-
-    res.json({
-      user: {
-        id: user.userId,
-        email: user.email,
-        displayName: user.displayName,
-      },
-    });
-  } catch (error) {
-    console.error("Token validation error:", error);
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: {
-        code: "SERVER_ERROR",
-        message: "An unexpected error occurred",
-      },
-    });
-  }
-});
+  },
+);
 
 export { router as authRouter };

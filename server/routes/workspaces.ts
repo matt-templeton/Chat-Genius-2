@@ -1,10 +1,10 @@
-import { Router } from 'express';
+import { Router } from "express";
 import { db } from "@db";
 import { workspaces, userWorkspaces, channels, users } from "@db/schema";
 import { eq, and } from "drizzle-orm";
-import type { Request, Response } from 'express';
-import { isAuthenticated } from '../middleware/auth';
-import { z } from 'zod';
+import type { Request, Response } from "express";
+import { isAuthenticated } from "../middleware/auth";
+import { z } from "zod";
 
 const router = Router();
 
@@ -23,7 +23,7 @@ const updateWorkspaceSchema = z.object({
  * @route GET /workspaces
  * @desc List all workspaces that authenticated user is a member of
  */
-router.get('/', isAuthenticated, async (req: Request, res: Response) => {
+router.get("/", isAuthenticated, async (req: Request, res: Response) => {
   try {
     const workspacesList = await db
       .select({
@@ -32,26 +32,26 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
         description: workspaces.description,
         archived: workspaces.archived,
         createdAt: workspaces.createdAt,
-        updatedAt: workspaces.updatedAt
+        updatedAt: workspaces.updatedAt,
       })
       .from(workspaces)
       .innerJoin(
         userWorkspaces,
         and(
           eq(userWorkspaces.workspaceId, workspaces.workspaceId),
-          eq(userWorkspaces.userId, req.user!.userId)
-        )
+          eq(userWorkspaces.userId, req.user!.userId),
+        ),
       );
 
     res.json(workspacesList);
   } catch (error) {
-    console.error('Error fetching workspaces:', error);
+    console.error("Error fetching workspaces:", error);
     res.status(500).json({
       error: "Internal Server Error",
       details: {
         code: "SERVER_ERROR",
-        message: "Failed to fetch workspaces"
-      }
+        message: "Failed to fetch workspaces",
+      },
     });
   }
 });
@@ -60,7 +60,7 @@ router.get('/', isAuthenticated, async (req: Request, res: Response) => {
  * @route POST /workspaces
  * @desc Create a new workspace with a default general channel
  */
-router.post('/', isAuthenticated, async (req: Request, res: Response) => {
+router.post("/", isAuthenticated, async (req: Request, res: Response) => {
   try {
     // Validate input
     const validationResult = createWorkspaceSchema.safeParse(req.body);
@@ -70,51 +70,53 @@ router.post('/', isAuthenticated, async (req: Request, res: Response) => {
         details: {
           code: "VALIDATION_ERROR",
           message: "Invalid workspace data",
-          errors: validationResult.error.errors
-        }
+          errors: validationResult.error.errors,
+        },
       });
     }
 
     const { name, description } = validationResult.data;
 
     // Create workspace
-    const [workspace] = await db.insert(workspaces).values({
-      name,
-      description,
-      archived: false,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    }).returning();
-
+    const [workspace] = await db
+      .insert(workspaces)
+      .values({
+        name,
+        description,
+        archived: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
     // Add creator as workspace owner
     await db.insert(userWorkspaces).values({
       userId: req.user!.userId,
       workspaceId: workspace.workspaceId,
-      role: 'OWNER',
+      role: "OWNER",
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
     });
 
     // Create default general channel
     await db.insert(channels).values({
       workspaceId: workspace.workspaceId,
-      name: 'general',
-      topic: 'Default channel for general discussions',
-      channelType: 'PUBLIC',
+      name: "general",
+      topic: "Default channel for general discussions",
+      channelType: "PUBLIC",
       archived: false,
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
     });
 
     res.status(201).json(workspace);
   } catch (error) {
-    console.error('Error creating workspace:', error);
+    console.error("Error creating workspace:", error);
     res.status(500).json({
       error: "Internal Server Error",
       details: {
         code: "SERVER_ERROR",
-        message: "Failed to create workspace"
-      }
+        message: "Failed to create workspace",
+      },
     });
   }
 });
@@ -123,191 +125,209 @@ router.post('/', isAuthenticated, async (req: Request, res: Response) => {
  * @route GET /workspaces/:workspaceId
  * @desc Get workspace details
  */
-router.get('/:workspaceId', isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    const { workspaceId } = req.params;
-    const workspace = await db.query.workspaces.findFirst({
-      where: eq(workspaces.workspaceId, parseInt(workspaceId))
-    });
+router.get(
+  "/:workspaceId",
+  isAuthenticated,
+  async (req: Request, res: Response) => {
+    try {
+      const { workspaceId } = req.params;
+      const workspace = await db.query.workspaces.findFirst({
+        where: eq(workspaces.workspaceId, parseInt(workspaceId)),
+      });
 
-    if (!workspace) {
-      return res.status(404).json({
-        error: "Workspace Not Found",
+      if (!workspace) {
+        return res.status(404).json({
+          error: "Workspace Not Found",
+          details: {
+            code: "WORKSPACE_NOT_FOUND",
+            message: "The requested workspace does not exist",
+          },
+        });
+      }
+
+      res.json(workspace);
+    } catch (error) {
+      console.error("Error fetching workspace:", error);
+      res.status(500).json({
+        error: "Internal Server Error",
         details: {
-          code: "WORKSPACE_NOT_FOUND",
-          message: "The requested workspace does not exist"
-        }
+          code: "SERVER_ERROR",
+          message: "Failed to fetch workspace",
+        },
       });
     }
-
-    res.json(workspace);
-  } catch (error) {
-    console.error('Error fetching workspace:', error);
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: {
-        code: "SERVER_ERROR",
-        message: "Failed to fetch workspace"
-      }
-    });
-  }
-});
+  },
+);
 
 /**
  * @route PUT /workspaces/:workspaceId
  * @desc Update a workspace
  */
-router.put('/:workspaceId', isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    const { workspaceId } = req.params;
+router.put(
+  "/:workspaceId",
+  isAuthenticated,
+  async (req: Request, res: Response) => {
+    try {
+      const { workspaceId } = req.params;
 
-    // Validate input
-    const validationResult = updateWorkspaceSchema.safeParse(req.body);
-    if (!validationResult.success) {
-      return res.status(400).json({
-        error: "Bad Request",
-        details: {
-          code: "VALIDATION_ERROR",
-          message: "Invalid workspace data",
-          errors: validationResult.error.errors
-        }
-      });
-    }
-
-    const { name, description } = validationResult.data;
-
-    const [workspace] = await db.update(workspaces)
-      .set({
-        name,
-        description,
-        updatedAt: new Date()
-      })
-      .where(eq(workspaces.workspaceId, parseInt(workspaceId)))
-      .returning();
-
-    if (!workspace) {
-      return res.status(404).json({
-        error: "Workspace Not Found",
-        details: {
-          code: "WORKSPACE_NOT_FOUND",
-          message: "The requested workspace does not exist"
-        }
-      });
-    }
-
-    res.json(workspace);
-  } catch (error) {
-    console.error('Error updating workspace:', error);
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: {
-        code: "SERVER_ERROR",
-        message: "Failed to update workspace"
+      // Validate input
+      const validationResult = updateWorkspaceSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({
+          error: "Bad Request",
+          details: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid workspace data",
+            errors: validationResult.error.errors,
+          },
+        });
       }
-    });
-  }
-});
+
+      const { name, description } = validationResult.data;
+
+      const [workspace] = await db
+        .update(workspaces)
+        .set({
+          name,
+          description,
+          updatedAt: new Date(),
+        })
+        .where(eq(workspaces.workspaceId, parseInt(workspaceId)))
+        .returning();
+
+      if (!workspace) {
+        return res.status(404).json({
+          error: "Workspace Not Found",
+          details: {
+            code: "WORKSPACE_NOT_FOUND",
+            message: "The requested workspace does not exist",
+          },
+        });
+      }
+
+      res.json(workspace);
+    } catch (error) {
+      console.error("Error updating workspace:", error);
+      res.status(500).json({
+        error: "Internal Server Error",
+        details: {
+          code: "SERVER_ERROR",
+          message: "Failed to update workspace",
+        },
+      });
+    }
+  },
+);
 
 /**
  * @route DELETE /workspaces/:workspaceId
  * @desc Archive (soft-delete) a workspace
  */
-router.delete('/:workspaceId', isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    const { workspaceId } = req.params;
+router.delete(
+  "/:workspaceId",
+  isAuthenticated,
+  async (req: Request, res: Response) => {
+    try {
+      const { workspaceId } = req.params;
 
-    const [workspace] = await db.update(workspaces)
-      .set({
-        archived: true,
-        updatedAt: new Date()
-      })
-      .where(eq(workspaces.workspaceId, parseInt(workspaceId)))
-      .returning();
+      const [workspace] = await db
+        .update(workspaces)
+        .set({
+          archived: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(workspaces.workspaceId, parseInt(workspaceId)))
+        .returning();
 
-    if (!workspace) {
-      return res.status(404).json({
-        error: "Workspace Not Found",
+      if (!workspace) {
+        return res.status(404).json({
+          error: "Workspace Not Found",
+          details: {
+            code: "WORKSPACE_NOT_FOUND",
+            message: "The requested workspace does not exist",
+          },
+        });
+      }
+
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error archiving workspace:", error);
+      res.status(500).json({
+        error: "Internal Server Error",
         details: {
-          code: "WORKSPACE_NOT_FOUND",
-          message: "The requested workspace does not exist"
-        }
+          code: "SERVER_ERROR",
+          message: "Failed to archive workspace",
+        },
       });
     }
-
-    res.status(204).send();
-  } catch (error) {
-    console.error('Error archiving workspace:', error);
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: {
-        code: "SERVER_ERROR",
-        message: "Failed to archive workspace"
-      }
-    });
-  }
-});
+  },
+);
 
 /**
  * @route GET /workspaces/{workspaceId}/members
  * @desc Get all members of a workspace
  */
-router.get('/:workspaceId/members', isAuthenticated, async (req: Request, res: Response) => {
-  try {
-    const { workspaceId } = req.params;
+router.get(
+  "/:workspaceId/members",
+  isAuthenticated,
+  async (req: Request, res: Response) => {
+    try {
+      const { workspaceId } = req.params;
 
-    // Check if user is a member of the workspace
-    const userMembership = await db
-      .select()
-      .from(userWorkspaces)
-      .where(
-        and(
-          eq(userWorkspaces.workspaceId, parseInt(workspaceId)),
-          eq(userWorkspaces.userId, req.user!.userId)
+      // Check if user is a member of the workspace
+      const userMembership = await db
+        .select()
+        .from(userWorkspaces)
+        .where(
+          and(
+            eq(userWorkspaces.workspaceId, parseInt(workspaceId)),
+            eq(userWorkspaces.userId, req.user!.userId),
+          ),
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (!userMembership.length) {
-      return res.status(403).json({
-        error: "Forbidden",
+      if (!userMembership.length) {
+        return res.status(403).json({
+          error: "Forbidden",
+          details: {
+            code: "NOT_WORKSPACE_MEMBER",
+            message: "You are not a member of this workspace",
+          },
+        });
+      }
+
+      // Get all workspace members
+      const workspaceMembers = await db
+        .select({
+          userId: users.userId,
+          email: users.email,
+          displayName: users.displayName,
+          lastKnownPresence: users.lastKnownPresence,
+          role: userWorkspaces.role,
+          joinedAt: userWorkspaces.createdAt,
+        })
+        .from(userWorkspaces)
+        .innerJoin(users, eq(users.userId, userWorkspaces.userId))
+        .where(
+          and(
+            eq(userWorkspaces.workspaceId, parseInt(workspaceId)),
+            eq(users.deactivated, false),
+          ),
+        )
+        .orderBy(userWorkspaces.createdAt);
+
+      res.json(workspaceMembers);
+    } catch (error) {
+      console.error("Error fetching workspace members:", error);
+      res.status(500).json({
+        error: "Internal Server Error",
         details: {
-          code: "NOT_WORKSPACE_MEMBER",
-          message: "You are not a member of this workspace"
-        }
+          code: "SERVER_ERROR",
+          message: "Failed to fetch workspace members",
+        },
       });
     }
-
-    // Get all workspace members
-    const workspaceMembers = await db
-      .select({
-        userId: users.userId,
-        email: users.email,
-        displayName: users.displayName,
-        lastKnownPresence: users.lastKnownPresence,
-        role: userWorkspaces.role,
-        joinedAt: userWorkspaces.createdAt
-      })
-      .from(userWorkspaces)
-      .innerJoin(users, eq(users.userId, userWorkspaces.userId))
-      .where(
-        and(
-          eq(userWorkspaces.workspaceId, parseInt(workspaceId)),
-          eq(users.deactivated, false)
-        )
-      )
-      .orderBy(userWorkspaces.createdAt);
-
-    res.json(workspaceMembers);
-  } catch (error) {
-    console.error('Error fetching workspace members:', error);
-    res.status(500).json({
-      error: "Internal Server Error",
-      details: {
-        code: "SERVER_ERROR",
-        message: "Failed to fetch workspace members"
-      }
-    });
-  }
-});
+  },
+);
 
 export { router as workspaceRouter };
