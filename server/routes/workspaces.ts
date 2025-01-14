@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from "@db";
-import { workspaces, userWorkspaces, channels } from "@db/schema";
+import { workspaces, userWorkspaces, channels, users } from "@db/schema";
 import { eq, and } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
@@ -242,6 +242,69 @@ router.delete('/:workspaceId', isAuthenticated, async (req: Request, res: Respon
       details: {
         code: "SERVER_ERROR",
         message: "Failed to archive workspace"
+      }
+    });
+  }
+});
+
+/**
+ * @route GET /workspaces/{workspaceId}/members
+ * @desc Get all members of a workspace
+ */
+router.get('/:workspaceId/members', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
+
+    // Check if user is a member of the workspace
+    const userMembership = await db
+      .select()
+      .from(userWorkspaces)
+      .where(
+        and(
+          eq(userWorkspaces.workspaceId, parseInt(workspaceId)),
+          eq(userWorkspaces.userId, req.user!.userId)
+        )
+      )
+      .limit(1);
+
+    if (!userMembership.length) {
+      return res.status(403).json({
+        error: "Forbidden",
+        details: {
+          code: "NOT_WORKSPACE_MEMBER",
+          message: "You are not a member of this workspace"
+        }
+      });
+    }
+
+    // Get all workspace members
+    const workspaceMembers = await db
+      .select({
+        userId: users.userId,
+        email: users.email,
+        displayName: users.displayName,
+        lastKnownPresence: users.lastKnownPresence,
+        role: userWorkspaces.role,
+        joinedAt: userWorkspaces.createdAt
+      })
+      .from(userWorkspaces)
+      .innerJoin(users, eq(users.userId, userWorkspaces.userId))
+      .where(
+        and(
+          eq(userWorkspaces.workspaceId, parseInt(workspaceId)),
+          eq(users.deactivated, false)
+        )
+      )
+      .orderBy(userWorkspaces.createdAt);
+
+    res.json(workspaceMembers);
+  } catch (error) {
+    console.error('Error fetching workspace members:', error);
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: {
+        code: "SERVER_ERROR",
+        message: "Failed to fetch workspace members"
       }
     });
   }
