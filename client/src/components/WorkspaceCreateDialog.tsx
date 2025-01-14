@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAppDispatch } from "@/store";
 import { createWorkspace } from "@/store/workspaceSlice";
+import { fetchChannels } from "@/store/channelSlice";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 const formSchema = z.object({
   name: z.string()
@@ -40,6 +42,7 @@ interface WorkspaceCreateDialogProps {
 export function WorkspaceCreateDialog({ isOpen, onOpenChange }: WorkspaceCreateDialogProps) {
   const dispatch = useAppDispatch();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -50,11 +53,30 @@ export function WorkspaceCreateDialog({ isOpen, onOpenChange }: WorkspaceCreateD
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      await dispatch(createWorkspace({ name: values.name.trim() })).unwrap();
+      const result = await dispatch(createWorkspace({ name: values.name.trim() })).unwrap();
+      
+      const channels = await dispatch(fetchChannels({ 
+        workspaceId: result.workspaceId,
+        showArchived: false 
+      })).unwrap();
+
+      const generalChannel = channels.find(
+        channel => channel.name.toLowerCase() === 'general'
+      );
+
+      if (generalChannel) {
+        setLocation(`/chat/${result.workspaceId}/${generalChannel.channelId}`);
+      } else if (channels.length > 0) {
+        setLocation(`/chat/${result.workspaceId}/${channels[0].channelId}`);
+      } else {
+        setLocation(`/chat/${result.workspaceId}`);
+      }
+
       toast({
         title: "Success",
         description: "Workspace created successfully",
       });
+      
       form.reset();
       onOpenChange(false);
     } catch (error) {

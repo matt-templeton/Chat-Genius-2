@@ -89,7 +89,7 @@ export function ChatArea() {
   // Memoize the channel event handler
   const handleChannelEvent = useCallback((event: any) => {
     if (event.type === "CHANNEL_CREATED" || event.type === "CHANNEL_UPDATED" || event.type === "CHANNEL_ARCHIVED") {
-      if (event.channel.id === parseInt(channelId)) {
+      if (event.data.id === parseInt(channelId)) {
         queryClient.invalidateQueries({
           queryKey: [`/api/v1/channels/${channelId}/messages`],
           exact: true

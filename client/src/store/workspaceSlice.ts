@@ -92,7 +92,14 @@ export const createWorkspace = createAsyncThunk(
       );
 
       if (generalChannel) {
+        // Set the general channel as current channel
         dispatch(setCurrentChannel(generalChannel));
+      } else {
+        console.warn('No general channel found in new workspace:', data.name);
+        // If no general channel exists, use the first available channel
+        if (channels.length > 0) {
+          dispatch(setCurrentChannel(channels[0]));
+        }
       }
 
       return data;
