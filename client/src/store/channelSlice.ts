@@ -129,10 +129,31 @@ export const createDirectMessage = createAsyncThunk(
   'channel/createDirectMessage',
   async ({ workspaceId, participants }: { 
     workspaceId: number,
-    participants: string[]
+    participants: number[]
   }, { rejectWithValue }) => {
     try {
+      // Validate input
+      if (!participants.length) {
+        return rejectWithValue('No participants selected');
+      }
+
       const token = localStorage.getItem('accessToken');
+      if (!token) {
+        return rejectWithValue('Authentication required');
+      }
+
+      console.log('Creating DM with participants:', participants);
+
+      const requestData = {
+        name: `dm-${Date.now()}`, // Unique name for the DM channel
+        workspaceId,
+        channelType: 'DM',
+        topic: 'Direct Message Channel',
+        participants,
+      };
+
+      console.log('Request payload:', requestData);
+
       const response = await fetch('/api/v1/channels', {
         method: 'POST',
         headers: {
@@ -140,19 +161,26 @@ export const createDirectMessage = createAsyncThunk(
           'Authorization': `Bearer ${token}`,
         },
         credentials: 'include',
-        body: JSON.stringify({
-          workspaceId,
-          channelType: 'DM',
-          participants,
-        }),
+        body: JSON.stringify(requestData),
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        return rejectWithValue(errorText || 'Failed to create direct message');
+        const errorData = await response.json();
+        console.error('Failed to create direct message:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData
+        });
+        return rejectWithValue(errorData.details?.message || 'Failed to create direct message');
       }
 
       const data = await response.json();
+      if (!data) {
+        console.error('No data returned from channel creation');
+        return rejectWithValue('No data returned from server');
+      }
+
+      console.log('Channel created successfully:', data);
       return data as Channel;
     } catch (error) {
       console.error('Error creating direct message:', error);
@@ -184,12 +212,15 @@ const channelSlice = createSlice({
     },
     handleChannelCreated: (state, action) => {
       const channel = action.payload;
-      const channelExists = state.channels.some(c => c.channelId === channel.channelId);
-      if (!channelExists) {
-        state.channels.push(channel);
-        // Set as current if it matches
-        if (state.currentChannel?.channelId === channel.channelId) {
-          state.currentChannel = channel;
+      // Only add to channels if it's not a DM
+      if (channel.channelType !== 'DM') {
+        const channelExists = state.channels.some(c => c.channelId === channel.channelId);
+        if (!channelExists) {
+          state.channels.push(channel);
+          // Set as current if it matches
+          if (state.currentChannel?.channelId === channel.channelId) {
+            state.currentChannel = channel;
+          }
         }
       }
     },
@@ -215,9 +246,12 @@ const channelSlice = createSlice({
     },
     handleDirectMessageCreated: (state, action) => {
       const dm = action.payload;
-      const dmExists = state.dms.some(d => d.channelId === dm.channelId);
-      if (!dmExists && dm.channelType === 'DM') {
-        state.dms.push(dm);
+      // Only add to DMs if it's a DM channel and doesn't exist
+      if (dm.channelType === 'DM') {
+        const dmExists = state.dms.some(d => d.channelId === dm.channelId);
+        if (!dmExists) {
+          state.dms.push(dm);
+        }
       }
     },
   },
@@ -267,6 +301,13 @@ const channelSlice = createSlice({
       })
       .addCase(createDirectMessage.fulfilled, (state, action) => {
         state.loading = false;
+        // Only add to DMs if it's a DM channel and doesn't exist
+        if (action.payload.channelType === 'DM') {
+          const dmExists = state.dms.some(dm => dm.channelId === action.payload.channelId);
+          if (!dmExists) {
+            state.dms.push(action.payload);
+          }
+        }
         state.error = null;
       })
       .addCase(createDirectMessage.rejected, (state, action) => {

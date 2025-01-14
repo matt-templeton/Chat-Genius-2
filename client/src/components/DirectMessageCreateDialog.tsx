@@ -30,7 +30,7 @@ export function DirectMessageCreateDialog({
   onDmCreated,
 }: DirectMessageCreateDialogProps) {
   const [isCreating, setIsCreating] = useState(false);
-  const [members, setMembers] = useState<Array<{ label: string; value: string }>>([]);
+  const [members, setMembers] = useState<Array<{ label: string; value: string; userId: number }>>([]);
   const { toast } = useToast();
   const dispatch = useAppDispatch();
 
@@ -41,7 +41,6 @@ export function DirectMessageCreateDialog({
     },
   });
 
-  // Fetch workspace members when dialog opens
   useEffect(() => {
     const fetchMembers = async () => {
       try {
@@ -67,13 +66,13 @@ export function DirectMessageCreateDialog({
         }
 
         const data = await response.json();
-        // Filter out the current user and format for ComboBox
         const currentUser = localStorage.getItem('userId');
         const memberOptions = data
           .filter((member: any) => member.userId.toString() !== currentUser)
           .map((member: any) => ({
             label: member.displayName,
             value: member.displayName,
+            userId: member.userId,
           }));
 
         setMembers(memberOptions);
@@ -94,20 +93,34 @@ export function DirectMessageCreateDialog({
   const onSubmit = async (data: FormData) => {
     try {
       setIsCreating(true);
-      await dispatch(createDirectMessage({ 
+      const selectedMember = members.find(m => m.value === data.participant);
+
+      if (!selectedMember) {
+        throw new Error("Selected member not found");
+      }
+
+      console.log('Creating DM with member:', {
+        displayName: selectedMember.value,
+        userId: selectedMember.userId
+      });
+
+      const result = await dispatch(createDirectMessage({ 
         workspaceId, 
-        participants: [data.participant]
+        participants: [selectedMember.userId]
       })).unwrap();
+
+      console.log('DM creation result:', result);
 
       toast({
         title: "Direct message created",
-        description: "You can now start chatting.",
+        description: `Started a conversation with ${selectedMember.value}`,
       });
 
       onDmCreated?.();
       onOpenChange(false);
       form.reset();
     } catch (error) {
+      console.error('Error creating DM:', error);
       toast({
         title: "Error creating direct message",
         description: error instanceof Error ? error.message : "Something went wrong",
