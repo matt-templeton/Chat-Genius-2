@@ -267,67 +267,78 @@ router.delete(
  * @route GET /workspaces/{workspaceId}/members
  * @desc Get all members of a workspace
  */
-router.get(
-  "/:workspaceId/members",
-  isAuthenticated,
-  async (req: Request, res: Response) => {
-    try {
-      const { workspaceId } = req.params;
+router.get('/:workspaceId/members', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = req.params;
 
-      // Check if user is a member of the workspace
-      const userMembership = await db
-        .select()
-        .from(userWorkspaces)
-        .where(
-          and(
-            eq(userWorkspaces.workspaceId, parseInt(workspaceId)),
-            eq(userWorkspaces.userId, req.user!.userId),
-          ),
-        )
-        .limit(1);
+    // First check if workspace exists
+    const workspace = await db.query.workspaces.findFirst({
+      where: eq(workspaces.workspaceId, parseInt(workspaceId))
+    });
 
-      if (!userMembership.length) {
-        return res.status(403).json({
-          error: "Forbidden",
-          details: {
-            code: "NOT_WORKSPACE_MEMBER",
-            message: "You are not a member of this workspace",
-          },
-        });
-      }
-
-      // Get all workspace members
-      const workspaceMembers = await db
-        .select({
-          userId: users.userId,
-          email: users.email,
-          displayName: users.displayName,
-          lastKnownPresence: users.lastKnownPresence,
-          role: userWorkspaces.role,
-          joinedAt: userWorkspaces.createdAt,
-        })
-        .from(userWorkspaces)
-        .innerJoin(users, eq(users.userId, userWorkspaces.userId))
-        .where(
-          and(
-            eq(userWorkspaces.workspaceId, parseInt(workspaceId)),
-            eq(users.deactivated, false),
-          ),
-        )
-        .orderBy(userWorkspaces.createdAt);
-
-      res.json(workspaceMembers);
-    } catch (error) {
-      console.error("Error fetching workspace members:", error);
-      res.status(500).json({
-        error: "Internal Server Error",
+    if (!workspace) {
+      return res.status(404).json({
+        error: "Not Found",
         details: {
-          code: "SERVER_ERROR",
-          message: "Failed to fetch workspace members",
-        },
+          code: "WORKSPACE_NOT_FOUND",
+          message: "The requested workspace does not exist"
+        }
       });
     }
-  },
-);
+
+    // Check if user is a member of the workspace
+    const userMembership = await db
+      .select()
+      .from(userWorkspaces)
+      .where(
+        and(
+          eq(userWorkspaces.workspaceId, parseInt(workspaceId)),
+          eq(userWorkspaces.userId, req.user!.userId)
+        )
+      )
+      .limit(1);
+
+    if (!userMembership.length) {
+      return res.status(403).json({
+        error: "Forbidden",
+        details: {
+          code: "NOT_WORKSPACE_MEMBER",
+          message: "You are not a member of this workspace"
+        }
+      });
+    }
+
+    // Get all workspace members
+    const workspaceMembers = await db
+      .select({
+        userId: users.userId,
+        email: users.email,
+        displayName: users.displayName,
+        lastKnownPresence: users.lastKnownPresence,
+        role: userWorkspaces.role,
+        joinedAt: userWorkspaces.createdAt
+      })
+      .from(userWorkspaces)
+      .innerJoin(users, eq(users.userId, userWorkspaces.userId))
+      .where(
+        and(
+          eq(userWorkspaces.workspaceId, parseInt(workspaceId)),
+          eq(users.deactivated, false)
+        )
+      )
+      .orderBy(userWorkspaces.createdAt);
+
+    res.json(workspaceMembers);
+  } catch (error) {
+    console.error('Error fetching workspace members:', error);
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: {
+        code: "SERVER_ERROR",
+        message: "Failed to fetch workspace members"
+      }
+    });
+  }
+});
 
 export { router as workspaceRouter };

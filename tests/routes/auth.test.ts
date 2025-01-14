@@ -16,7 +16,6 @@ declare global {
 const request = supertest(app);
 global.server = app.listen(0, "0.0.0.0");
 registerRoutes(app);
-const request = supertest(app);
 
 describe("Auth Endpoints", () => {
   describe("POST /api/v1/auth/register", () => {

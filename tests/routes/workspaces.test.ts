@@ -483,6 +483,162 @@ describe('Workspace Endpoints', () => {
     });
   });
 
+  describe('GET /api/v1/workspaces/{workspaceId}/members', () => {
+    let testLocalWorkspace: any;
+    let otherUser: any;
+    let nonMemberUser: any;
+
+    beforeEach(async () => {
+      // Create a test workspace
+      const [workspace] = await db.insert(workspaces)
+        .values({
+          name: 'Test Workspace for Members',
+          description: 'A test workspace for member listing',
+          archived: false,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      testLocalWorkspace = workspace;
+
+      // Create UserWorkspace relationship for admin
+      await db.insert(userWorkspaces)
+        .values({
+          userId: testAdmin.userId,
+          workspaceId: workspace.workspaceId,
+          role: 'OWNER',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+
+      // Create another test user as workspace member
+      const timestamp = new Date().getTime();
+      const [otherTestUser] = await db.insert(users)
+        .values({
+          email: `other.user.${timestamp}@example.com`,
+          passwordHash: await bcrypt.hash(testPassword, 10),
+          displayName: 'Other Test User',
+          emailVerified: true,
+          deactivated: false,
+          lastKnownPresence: 'ONLINE',
+          lastLogin: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      otherUser = otherTestUser;
+
+      // Add other user to workspace
+      await db.insert(userWorkspaces)
+        .values({
+          userId: otherUser.userId,
+          workspaceId: workspace.workspaceId,
+          role: 'MEMBER',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+
+      // Create a user who is not a workspace member
+      const [nonMember] = await db.insert(users)
+        .values({
+          email: `non.member.${timestamp}@example.com`,
+          passwordHash: await bcrypt.hash(testPassword, 10),
+          displayName: 'Non Member User',
+          emailVerified: true,
+          deactivated: false,
+          lastKnownPresence: 'ONLINE',
+          lastLogin: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      nonMemberUser = nonMember;
+    });
+
+    it('should list all members of a workspace', async () => {
+      const response = await request
+        .get(`/api/v1/workspaces/${testLocalWorkspace.workspaceId}/members`)
+        .set('Authorization', `Bearer ${adminAccessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBe(2); // Admin and other user
+
+      // Verify member details
+      const members = response.body;
+      expect(members.some((m: any) => m.userId === testAdmin.userId)).toBe(true);
+      expect(members.some((m: any) => m.userId === otherUser.userId)).toBe(true);
+
+      // Verify member fields
+      const member = members[0];
+      expect(member).toHaveProperty('userId');
+      expect(member).toHaveProperty('email');
+      expect(member).toHaveProperty('displayName');
+      expect(member).toHaveProperty('lastKnownPresence');
+      expect(member).toHaveProperty('role');
+      expect(member).toHaveProperty('joinedAt');
+    });
+
+    it('should return 401 when not authenticated', async () => {
+      const response = await request
+        .get(`/api/v1/workspaces/${testLocalWorkspace.workspaceId}/members`);
+
+      expect(response.status).toBe(401);
+      expect(response.body.details.code).toBe('UNAUTHORIZED');
+    });
+
+    it('should return 403 when user is not a workspace member', async () => {
+      // Login as non-member user
+      const loginResponse = await request
+        .post('/api/v1/auth/login')
+        .send({
+          email: nonMemberUser.email,
+          password: testPassword
+        });
+
+      const nonMemberToken = loginResponse.body.accessToken;
+
+      const response = await request
+        .get(`/api/v1/workspaces/${testLocalWorkspace.workspaceId}/members`)
+        .set('Authorization', `Bearer ${nonMemberToken}`);
+
+      expect(response.status).toBe(403);
+      expect(response.body.details.code).toBe('NOT_WORKSPACE_MEMBER');
+    });
+
+    it('should return 404 for non-existent workspace', async () => {
+      const response = await request
+        .get('/api/v1/workspaces/99999/members')
+        .set('Authorization', `Bearer ${adminAccessToken}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body.details.code).toBe('WORKSPACE_NOT_FOUND');
+    });
+
+    afterEach(async () => {
+      // Clean up test data
+      if (testLocalWorkspace?.workspaceId) {
+        await db.delete(userWorkspaces)
+          .where(eq(userWorkspaces.workspaceId, testLocalWorkspace.workspaceId));
+        await db.delete(workspaces)
+          .where(eq(workspaces.workspaceId, testLocalWorkspace.workspaceId));
+      }
+
+      if (otherUser?.email) {
+        await db.delete(users)
+          .where(eq(users.email, otherUser.email));
+      }
+
+      if (nonMemberUser?.email) {
+        await db.delete(users)
+          .where(eq(users.email, nonMemberUser.email));
+      }
+    });
+  });
+
   afterAll(async () => {
     try {
       // Clean up test data in reverse order of creation
