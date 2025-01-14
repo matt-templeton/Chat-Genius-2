@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAppSelector, useAppDispatch } from "@/store";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronRight, Plus } from "lucide-react";
@@ -30,28 +30,31 @@ export function DirectMessagesList() {
   const currentWorkspace = useAppSelector(state => state.workspace.currentWorkspace);
   const { dms = [], loading, currentChannel } = useAppSelector(state => state.channel);
 
+  // Memoize the WebSocket event handler
+  const handleWebSocketEvent = useCallback((event: any) => {
+    if (!currentWorkspace) return;
+
+    switch (event.type) {
+      case 'CHANNEL_CREATED':
+        if (event.workspaceId === currentWorkspace.workspaceId && event.channel.channelType === 'DM') {
+          dispatch(handleDirectMessageCreated(event.channel));
+        }
+        break;
+    }
+  }, [currentWorkspace, dispatch]);
+
+  // Setup WebSocket connection
+  useWebSocket({
+    workspaceId: currentWorkspace?.workspaceId || 0,
+    onChannelEvent: handleWebSocketEvent,
+  });
+
   // Fetch DMs when workspace changes
   useEffect(() => {
     if (currentWorkspace?.workspaceId) {
-      dispatch(fetchDirectMessages({ workspaceId: currentWorkspace.workspaceId }));
+      // dispatch(fetchDirectMessages({ workspaceId: currentWorkspace.workspaceId }));
     }
   }, [currentWorkspace?.workspaceId, dispatch]);
-
-  // Setup WebSocket connection for real-time updates
-  useWebSocket({
-    workspaceId: currentWorkspace?.workspaceId || 0,
-    onChannelEvent: (event) => {
-      if (!currentWorkspace) return;
-
-      switch (event.type) {
-        case 'CHANNEL_CREATED':
-          if (event.workspaceId === currentWorkspace.workspaceId && event.channel.channelType === 'DM') {
-            dispatch(handleDirectMessageCreated(event.channel));
-          }
-          break;
-      }
-    },
-  });
 
   const handleDmSelect = (channelId: number) => {
     const selectedDm = dms.find(dm => dm.channelId === channelId);

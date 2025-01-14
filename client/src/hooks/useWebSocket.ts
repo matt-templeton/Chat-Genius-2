@@ -16,59 +16,43 @@ export function useWebSocket({
   const [isConnecting, setIsConnecting] = useState(false);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
-  const connections = useRef(0);
-
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const { toast } = useToast();
-
   const [isConnected, setIsConnected] = useState(false);
 
+  // Memoize the connect function
   const connect = useCallback(() => {
+    // Don't connect if there's no workspaceId or if already connected/connecting
     if (
       !workspaceId ||
       workspaceId <= 0 ||
       isConnecting ||
-      connections.current > 0 ||
-      wsRef.current?.readyState === WebSocket.OPEN
+      wsRef.current?.readyState === WebSocket.OPEN ||
+      wsRef.current?.readyState === WebSocket.CONNECTING
     ) {
       return;
-    }
-
-    // Clean up existing connection first
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
     }
 
     try {
       setIsConnecting(true);
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const ws = new WebSocket(
-        `${protocol}//${window.location.host}/ws?workspaceId=${workspaceId}`,
+        `${protocol}//${window.location.host}/ws?workspaceId=${workspaceId}`
       );
 
-      console.log(reconnectAttempts.current);
       ws.onopen = () => {
         console.log("WebSocket connected to workspace:", workspaceId);
         setIsConnecting(false);
         setIsConnected(true);
-        connections.current = 1;
+        reconnectAttempts.current = 0;
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          console.log("WebSocket received message:", data);
-
-          if (
-            onChannelEvent &&
-            ["CHANNEL_CREATED", "CHANNEL_UPDATED", "CHANNEL_ARCHIVED"].includes(
-              data.type,
-            )
-          ) {
+          if (onChannelEvent && ["CHANNEL_CREATED", "CHANNEL_UPDATED", "CHANNEL_ARCHIVED"].includes(data.type)) {
             onChannelEvent(data);
           } else if (onMessageEvent && data.type === "MESSAGE_CREATED") {
-            console.log("Handling MESSAGE_CREATED event:", data);
             onMessageEvent(data);
           }
         } catch (error) {
@@ -78,6 +62,7 @@ export function useWebSocket({
 
       ws.onerror = () => {
         setIsConnecting(false);
+        setIsConnected(false);
       };
 
       ws.onclose = () => {
@@ -85,17 +70,10 @@ export function useWebSocket({
         setIsConnected(false);
         wsRef.current = null;
 
+        // Only attempt reconnection if we haven't reached max attempts
         if (reconnectAttempts.current < maxReconnectAttempts) {
-          const backoffTime = Math.min(
-            1000 * Math.pow(2, reconnectAttempts.current),
-            10000,
-          );
+          const backoffTime = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 10000);
           reconnectAttempts.current++;
-
-          if (reconnectTimeoutRef.current) {
-            clearTimeout(reconnectTimeoutRef.current);
-          }
-
           reconnectTimeoutRef.current = setTimeout(connect, backoffTime);
         }
       };
@@ -107,6 +85,7 @@ export function useWebSocket({
     }
   }, [workspaceId, onChannelEvent, onMessageEvent]);
 
+  // Connect only when workspaceId changes
   useEffect(() => {
     connect();
 
@@ -121,14 +100,13 @@ export function useWebSocket({
       setIsConnecting(false);
       reconnectAttempts.current = 0;
     };
-  }, [connect]);
+  }, [workspaceId, connect]);
 
-  return {
-    send: useCallback((message: any) => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify(message));
-      }
-    }, []),
-    isConnected,
-  };
+  const send = useCallback((message: any) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify(message));
+    }
+  }, []);
+
+  return { send, isConnected };
 }

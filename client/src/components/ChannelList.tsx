@@ -4,7 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Hash, Lock, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useLocation } from "wouter";
 import { ChannelCreateDialog } from "./ChannelCreateDialog";
@@ -31,6 +31,35 @@ export function ChannelList() {
   const currentWorkspace = useAppSelector(state => state.workspace.currentWorkspace);
   const { channels, loading, currentChannel } = useAppSelector(state => state.channel);
 
+  // Memoize the WebSocket event handler
+  const handleWebSocketEvent = useCallback((event: any) => {
+    if (!currentWorkspace) return;
+
+    switch (event.type) {
+      case 'CHANNEL_CREATED':
+        if (event.workspaceId === currentWorkspace.workspaceId) {
+          dispatch(handleChannelCreated(event.channel));
+        }
+        break;
+      case 'CHANNEL_UPDATED':
+        if (event.workspaceId === currentWorkspace.workspaceId) {
+          dispatch(handleChannelUpdated(event.channel));
+        }
+        break;
+      case 'CHANNEL_ARCHIVED':
+        if (event.workspaceId === currentWorkspace.workspaceId) {
+          dispatch(handleChannelArchived(event.channel.id));
+        }
+        break;
+    }
+  }, [currentWorkspace, dispatch]);
+
+  // Setup WebSocket connection
+  useWebSocket({
+    workspaceId: currentWorkspace?.workspaceId || 0,
+    onChannelEvent: handleWebSocketEvent,
+  });
+
   // Fetch channels when workspace changes
   useEffect(() => {
     if (currentWorkspace?.workspaceId) {
@@ -52,31 +81,6 @@ export function ChannelList() {
     }
   }, [channels, currentChannel, currentWorkspace?.workspaceId, dispatch, setLocation]);
 
-  // Setup WebSocket connection for real-time updates
-  useWebSocket({
-    workspaceId: currentWorkspace?.workspaceId || 0,
-    onChannelEvent: (event) => {
-      if (!currentWorkspace) return;
-
-      switch (event.type) {
-        case 'CHANNEL_CREATED':
-          if (event.workspaceId === currentWorkspace.workspaceId) {
-            dispatch(handleChannelCreated(event.channel));
-          }
-          break;
-        case 'CHANNEL_UPDATED':
-          if (event.workspaceId === currentWorkspace.workspaceId) {
-            dispatch(handleChannelUpdated(event.channel));
-          }
-          break;
-        case 'CHANNEL_ARCHIVED':
-          if (event.workspaceId === currentWorkspace.workspaceId) {
-            dispatch(handleChannelArchived(event.channel.id));
-          }
-          break;
-      }
-    },
-  });
 
   const handleChannelSelect = (channelId: number) => {
     const selectedChannel = channels.find(c => c.channelId === channelId);

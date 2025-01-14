@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -12,15 +12,19 @@ import { queryClient } from "@/lib/queryClient";
 import { useAppDispatch } from "@/store";
 import { createMessage } from "@/store/messageSlice";
 import { Message } from "@/types/message";
+import { useToast } from "@/hooks/use-toast";
 
-interface Message {
-  messageId: number;
-  content: string;
-  userId: number;
-  channelId: number;
-  postedAt: string;
-  deleted?: boolean;
-}
+// interface Message {
+//   messageId: number;
+//   content: string;
+//   userId: number;
+//   channelId: number;
+//   postedAt: string;
+//   deleted?: boolean;
+//   workspaceId: number;
+//   createdAt: string;
+//   updatedAt: string;
+// }
 
 interface Channel {
   channelId: number;
@@ -51,6 +55,8 @@ export function ChatArea() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const dispatch = useAppDispatch();
   const [realtimeMessages, setRealtimeMessages] = useState<Message[]>([]);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   // Fetch channel details
   const { data: channel } = useQuery<Channel>({
@@ -69,52 +75,94 @@ export function ChatArea() {
     (a, b) => new Date(a.postedAt).getTime() - new Date(b.postedAt).getTime()
   );
 
-  // Reset realtime messages when channel changes
-  useEffect(() => {
-    setRealtimeMessages([]);
-  }, [channelId]);
+  // Add messageIdsRef to track processed messages
+  const processedMessageIds = useRef<Set<number>>(new Set());
 
-  // WebSocket integration for real-time updates
+  // Move the message existence check to a ref to avoid dependencies on messages
+  const existingMessageIds = useRef(new Set<number>());
+  
+  // Update existingMessageIds when messages change
+  useEffect(() => {
+    existingMessageIds.current = new Set(messages.map(m => m.messageId));
+  }, [messages]);
+
+  // Memoize the channel event handler
+  const handleChannelEvent = useCallback((event: any) => {
+    if (event.type === "CHANNEL_CREATED" || event.type === "CHANNEL_UPDATED" || event.type === "CHANNEL_ARCHIVED") {
+      if (event.channel.id === parseInt(channelId)) {
+        queryClient.invalidateQueries({
+          queryKey: [`/api/v1/channels/${channelId}/messages`],
+          exact: true
+        });
+      }
+    }
+  }, [channelId, queryClient]);
+
+  // Memoize the message event handler
+  const handleMessageEvent = useCallback((event: WebSocketMessageEvent) => {
+    console.log("WebSocket message event received:", event);
+    
+    if (
+      event.type === "MESSAGE_CREATED" && 
+      event.data.channelId === parseInt(channelId) && 
+      event.workspaceId === parseInt(workspaceId)
+    ) {
+      console.log("Message event matches current channel:", {
+        eventChannelId: event.data.channelId,
+        currentChannelId: parseInt(channelId),
+        eventWorkspaceId: event.workspaceId,
+        currentWorkspaceId: parseInt(workspaceId)
+      });
+
+      // Check if we've already processed this message
+      if (processedMessageIds.current.has(event.data.messageId)) {
+        console.log("Message already processed, skipping:", event.data.messageId);
+        return;
+      }
+
+      // Add message ID to processed set
+      processedMessageIds.current.add(event.data.messageId);
+      console.log("Added message ID to processed set:", event.data.messageId);
+      
+      const newMessage: Message = {
+        messageId: event.data.messageId,
+        channelId: event.data.channelId,
+        workspaceId: event.data.workspaceId,
+        userId: event.data.userId,
+        content: event.data.content,
+        postedAt: event.data.createdAt,
+        createdAt: event.data.createdAt,
+        deleted: false
+      };
+
+      // Check if message exists using the ref instead of messages array
+      if (!existingMessageIds.current.has(newMessage.messageId)) {
+        console.log("Adding new message to realtime messages:", newMessage);
+        setRealtimeMessages(prev => [...prev, newMessage]);
+      } else {
+        console.log("Message already exists in existingMessageIds:", newMessage.messageId);
+      }
+    } else {
+      console.log("Message event did not match criteria:", {
+        type: event.type,
+        channelMatch: event.data?.channelId === parseInt(channelId),
+        workspaceMatch: event.workspaceId === parseInt(workspaceId)
+      });
+    }
+  }, [channelId, workspaceId]);
+
+  // Setup WebSocket connection
   const { send } = useWebSocket({
     workspaceId: parseInt(workspaceId),
-    onChannelEvent: (event) => {
-      if (event.type === "CHANNEL_CREATED" || event.type === "CHANNEL_UPDATED" || event.type === "CHANNEL_ARCHIVED") {
-        if (event.channel.id === parseInt(channelId)) {
-          queryClient.invalidateQueries({
-            queryKey: [`/api/v1/channels/${channelId}/messages`],
-            exact: true
-          });
-        }
-      }
-    },
-    onMessageEvent: (event: WebSocketMessageEvent) => {
-      console.log("ChatArea received message event:", event);
-      if (event.type === "MESSAGE_CREATED" && 
-          event.data.channelId === parseInt(channelId) && 
-          event.workspaceId === parseInt(workspaceId)) {
-        
-        // Convert the WebSocket message to a Message type
-        const newMessage: Message = {
-          messageId: event.data.messageId,
-          channelId: event.data.channelId,
-          workspaceId: event.data.workspaceId,
-          userId: event.data.userId,
-          content: event.data.content,
-          postedAt: event.data.createdAt,
-          createdAt: event.data.createdAt,
-          updatedAt: event.data.createdAt,
-          deleted: false
-        };
-
-        // Check if message already exists in either fetched or realtime messages
-        const messageExists = messages.some(m => m.messageId === newMessage.messageId);
-        
-        if (!messageExists) {
-          setRealtimeMessages(prev => [...prev, newMessage]);
-        }
-      }
-    },
+    onChannelEvent: handleChannelEvent,
+    onMessageEvent: handleMessageEvent,
   });
+
+  // Clear processed message IDs when channel changes
+  useEffect(() => {
+    setRealtimeMessages([]);
+    processedMessageIds.current.clear();
+  }, [channelId]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -126,28 +174,18 @@ export function ChatArea() {
 
     try {
       const result = await dispatch(createMessage({ 
-        channelId: parseInt(channelId), 
+        channelId: parseInt(channelId),
         content: message 
       })).unwrap();
 
       setMessage("");
-
-      // Add the sent message to realtime messages
-      const newMessage: Message = {
-        messageId: result.messageId,
-        channelId: result.channelId,
-        workspaceId: result.workspaceId,
-        userId: result.userId,
-        content: result.content,
-        postedAt: result.createdAt,
-        createdAt: result.createdAt,
-        updatedAt: result.updatedAt,
-        deleted: false
-      };
-
-      setRealtimeMessages(prev => [...prev, newMessage]);
+      processedMessageIds.current.add(result.messageId);
     } catch (error) {
-      console.error("Error sending message:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to send message",
+        variant: "destructive",
+      });
     }
   };
 
