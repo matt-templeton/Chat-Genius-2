@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-const server = registerRoutes(app);
+global.server = registerRoutes(app);
 const request = supertest(app);
 
 describe("Auth Endpoints", () => {

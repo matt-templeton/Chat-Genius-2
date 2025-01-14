@@ -1,3 +1,12 @@
+
+declare global {
+  namespace NodeJS {
+    interface Global {
+      server: any;
+    }
+  }
+}
+
 import { db } from "../db";
 import { users, workspaces, channels } from "../db/schema";
 import { eq, inArray } from "drizzle-orm";
@@ -96,4 +105,13 @@ afterAll(async () => {
     .delete(workspaces)
     .where(inArray(workspaces.workspaceId, workspaceIds));
   await db.delete(users).where(inArray(users.email, testEmails));
-});
+
+  // Close any remaining server connections
+  if (global.server) {
+    await new Promise<void>((resolve) => {
+      global.server.close(() => resolve());
+    });
+  }
+  // Close database connection
+  await db.end();
+}, 10000);
