@@ -21,12 +21,16 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-background">
+    <div className="h-screen flex flex-col overflow-hidden">
       <Toolbar />
-      <div className="flex-1 flex">
+      <div className="flex-1 flex min-h-0">
         <WorkspaceNavigationToolbar />
-        <ChatsSidebar />
-        <ChatArea />
+        <div className="w-64 border-r min-h-0">
+          <ChatsSidebar />
+        </div>
+        <div className="flex-1 min-h-0">
+          <ChatArea />
+        </div>
       </div>
     </div>
   );

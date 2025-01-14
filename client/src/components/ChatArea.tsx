@@ -11,18 +11,22 @@ import { cn } from "@/lib/utils";
 import { queryClient } from "@/lib/queryClient";
 
 interface Message {
-  id: number;
+  messageId: number;
   content: string;
   userId: number;
   channelId: number;
-  createdAt: string;
+  postedAt: string;
+  deleted?: boolean;
 }
 
 interface Channel {
-  id: number;
+  channelId: number;
   name: string;
-  description: string;
+  description?: string;
   workspaceId: number;
+  topic?: string;
+  channelType: 'PUBLIC' | 'PRIVATE' | 'DM';
+  archived: boolean;
 }
 
 export function ChatArea() {
@@ -32,14 +36,14 @@ export function ChatArea() {
 
   // Fetch channel details
   const { data: channel } = useQuery<Channel>({
-    queryKey: [`/api/v1/workspaces/${workspaceId}/channels/${channelId}`],
-    enabled: Boolean(workspaceId && channelId),
+    queryKey: [`/api/v1/channels/${channelId}`],
+    enabled: Boolean(channelId),
   });
 
   // Fetch messages
   const { data: messages = [] } = useQuery<Message[]>({
-    queryKey: [`/api/v1/workspaces/${workspaceId}/channels/${channelId}/messages`],
-    enabled: Boolean(workspaceId && channelId),
+    queryKey: [`/api/v1/channels/${channelId}/messages`],
+    enabled: Boolean(channelId),
   });
 
   // WebSocket integration for real-time updates
@@ -50,7 +54,7 @@ export function ChatArea() {
         // Only invalidate the messages query if it's the current channel
         if (event.channel.id === parseInt(channelId)) {
           void queryClient.invalidateQueries({
-            queryKey: [`/api/v1/workspaces/${workspaceId}/channels/${channelId}/messages`],
+            queryKey: [`/api/v1/channels/${channelId}/messages`],
           });
         }
       }
@@ -67,7 +71,7 @@ export function ChatArea() {
 
     try {
       const response = await fetch(
-        `/api/v1/workspaces/${workspaceId}/channels/${channelId}/messages`,
+        `/api/v1/channels/${channelId}/messages`,
         {
           method: "POST",
           headers: {
@@ -85,7 +89,7 @@ export function ChatArea() {
 
       // Invalidate messages query after successful send
       void queryClient.invalidateQueries({
-        queryKey: [`/api/v1/workspaces/${workspaceId}/channels/${channelId}/messages`],
+        queryKey: [`/api/v1/channels/${channelId}/messages`],
       });
     } catch (error) {
       console.error("Error sending message:", error);
@@ -101,9 +105,9 @@ export function ChatArea() {
   }
 
   return (
-    <div className="h-full flex flex-col bg-background">
+    <div className="flex flex-col h-full">
       {/* ChannelHeader */}
-      <div className="h-14 border-b px-4 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="flex-none h-14 min-h-[3.5rem] border-b px-4 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center space-x-2">
           <h1 className="font-semibold"># {channel?.name || "Loading..."}</h1>
           {channel?.description && (
@@ -118,31 +122,33 @@ export function ChatArea() {
       </div>
 
       {/* Message Display Area */}
-      <ScrollArea className="flex-1 px-4 py-2">
-        <div className="space-y-4">
-          {messages.map((msg) => (
-            <div key={msg.id} className="group flex items-start space-x-3 hover:bg-accent/5 rounded-lg p-2 -mx-2">
-              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                {/* Placeholder for user avatar */}
-                <span className="text-xs font-medium">U</span>
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center space-x-2">
-                  <span className="font-medium">User {msg.userId}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(msg.createdAt).toLocaleTimeString()}
-                  </span>
+      <div className="flex-1 overflow-hidden">
+        <ScrollArea className="h-full px-4">
+          <div className="py-4 space-y-4">
+            {messages.map((msg) => (
+              <div key={msg.messageId} className="group flex items-start space-x-3 hover:bg-accent/5 rounded-lg p-2 -mx-2">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  {/* Placeholder for user avatar */}
+                  <span className="text-xs font-medium">U</span>
                 </div>
-                <p className="text-sm mt-1 break-words">{msg.content}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-medium">User {msg.userId}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(msg.postedAt).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <p className="text-sm mt-1 break-words">{msg.content}</p>
+                </div>
               </div>
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-      </ScrollArea>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+        </ScrollArea>
+      </div>
 
       {/* MessageInput */}
-      <div className="border-t p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="flex-none border-t p-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="relative">
           <Input
             value={message}
