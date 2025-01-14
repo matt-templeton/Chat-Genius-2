@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useState, useEffect } from "react";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useLocation } from "wouter";
 import { ChannelCreateDialog } from "./ChannelCreateDialog";
 import {
   DropdownMenu,
@@ -17,16 +18,18 @@ import {
   handleChannelCreated, 
   handleChannelUpdated, 
   handleChannelArchived,
-  fetchChannels 
+  fetchChannels,
+  setCurrentChannel
 } from "@/store/channelSlice";
 
 export function ChannelList() {
   const [isExpanded, setIsExpanded] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const dispatch = useAppDispatch();
+  const [, setLocation] = useLocation();
 
   const currentWorkspace = useAppSelector(state => state.workspace.currentWorkspace);
-  const { channels, loading } = useAppSelector(state => state.channel);
+  const { channels, loading, currentChannel } = useAppSelector(state => state.channel);
 
   // Fetch channels when workspace changes
   useEffect(() => {
@@ -37,6 +40,17 @@ export function ChannelList() {
       }));
     }
   }, [currentWorkspace?.workspaceId, dispatch]);
+
+  // Set default channel (general) when channels are loaded
+  useEffect(() => {
+    if (channels.length > 0 && !currentChannel) {
+      const generalChannel = channels.find(c => c.name.toLowerCase() === 'general') || channels[0];
+      if (generalChannel) {
+        dispatch(setCurrentChannel(generalChannel));
+        setLocation(`/chat/${currentWorkspace?.workspaceId}/${generalChannel.channelId}`);
+      }
+    }
+  }, [channels, currentChannel, currentWorkspace?.workspaceId, dispatch, setLocation]);
 
   // Setup WebSocket connection for real-time updates
   useWebSocket({
@@ -63,6 +77,14 @@ export function ChannelList() {
       }
     },
   });
+
+  const handleChannelSelect = (channelId: number) => {
+    const selectedChannel = channels.find(c => c.channelId === channelId);
+    if (selectedChannel) {
+      dispatch(setCurrentChannel(selectedChannel));
+      setLocation(`/chat/${currentWorkspace?.workspaceId}/${channelId}`);
+    }
+  };
 
   if (!currentWorkspace) {
     return (
@@ -136,8 +158,10 @@ export function ChannelList() {
           size="sm"
           className={cn(
             "w-full justify-start px-2 gap-2",
-            "hover:bg-accent hover:text-accent-foreground"
+            "hover:bg-accent hover:text-accent-foreground",
+            currentChannel?.channelId === channel.channelId && "bg-accent/50"
           )}
+          onClick={() => handleChannelSelect(channel.channelId)}
         >
           {channel.channelType === 'PRIVATE' ? (
             <Lock className="h-4 w-4" />

@@ -16,16 +16,19 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { DirectMessageCreateDialog } from "./DirectMessageCreateDialog";
-import { fetchDirectMessages, handleDirectMessageCreated } from "@/store/channelSlice";
+import { fetchDirectMessages, handleDirectMessageCreated, setCurrentChannel } from "@/store/channelSlice";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { useLocation } from "wouter";
+import { cn } from "@/lib/utils";
 
 export function DirectMessagesList() {
   const [isExpanded, setIsExpanded] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const dispatch = useAppDispatch();
+  const [, setLocation] = useLocation();
 
   const currentWorkspace = useAppSelector(state => state.workspace.currentWorkspace);
-  const { dms = [], loading } = useAppSelector(state => state.channel);
+  const { dms = [], loading, currentChannel } = useAppSelector(state => state.channel);
 
   // Fetch DMs when workspace changes
   useEffect(() => {
@@ -49,6 +52,14 @@ export function DirectMessagesList() {
       }
     },
   });
+
+  const handleDmSelect = (channelId: number) => {
+    const selectedDm = dms.find(dm => dm.channelId === channelId);
+    if (selectedDm) {
+      dispatch(setCurrentChannel(selectedDm));
+      setLocation(`/chat/${currentWorkspace?.workspaceId}/${channelId}`);
+    }
+  };
 
   if (!currentWorkspace) {
     return (
@@ -123,7 +134,12 @@ export function DirectMessagesList() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-full justify-start px-2 gap-2 hover:bg-accent hover:text-accent-foreground"
+                className={cn(
+                  "w-full justify-start px-2 gap-2",
+                  "hover:bg-accent hover:text-accent-foreground",
+                  currentChannel?.channelId === dm.channelId && "bg-accent/50"
+                )}
+                onClick={() => handleDmSelect(dm.channelId)}
               >
                 <Avatar className="h-6 w-6">
                   <AvatarFallback>
