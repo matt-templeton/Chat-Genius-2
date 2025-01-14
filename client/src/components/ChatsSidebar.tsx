@@ -1,4 +1,5 @@
 import { ChannelList } from "./ChannelList";
+import { DirectMessagesList } from "./DirectMessagesList";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function ChatsSidebar() {
@@ -11,13 +12,8 @@ export function ChatsSidebar() {
         </div>
 
         {/* Direct Messages section */}
-        <div className="space-y-2 p-4 border-t">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold">Direct Messages</h2>
-          </div>
-          <div className="text-sm text-muted-foreground">
-            Direct messages coming soon
-          </div>
+        <div>
+          <DirectMessagesList />
         </div>
       </div>
     </ScrollArea>

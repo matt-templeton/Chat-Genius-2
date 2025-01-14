@@ -8,11 +8,14 @@ export interface Channel {
   description?: string;
   topic?: string;
   channelType: 'PUBLIC' | 'PRIVATE' | 'DM';
+  participants?: string[];
+  lastMessage?: string;
   createdAt: string;
 }
 
 interface ChannelState {
   channels: Channel[];
+  dms: Channel[];
   currentChannel: Channel | null;
   loading: boolean;
   error: string | null;
@@ -21,6 +24,7 @@ interface ChannelState {
 
 const initialState: ChannelState = {
   channels: [],
+  dms: [],
   currentChannel: null,
   loading: false,
   error: null,
@@ -96,6 +100,68 @@ export const createChannel = createAsyncThunk(
   }
 );
 
+export const fetchDirectMessages = createAsyncThunk(
+  'channel/fetchDirectMessages',
+  async ({ workspaceId }: { workspaceId: number }, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(`/api/v1/workspaces/${workspaceId}/dms`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return rejectWithValue(errorText || 'Failed to fetch direct messages');
+      }
+
+      const data = await response.json();
+      return data || [];
+    } catch (error) {
+      console.error('Error fetching direct messages:', error);
+      return rejectWithValue(error instanceof Error ? error.message : 'Failed to fetch direct messages');
+    }
+  }
+);
+
+export const createDirectMessage = createAsyncThunk(
+  'channel/createDirectMessage',
+  async ({ workspaceId, participants }: { 
+    workspaceId: number,
+    participants: string[]
+  }, { rejectWithValue }) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch('/api/v1/channels', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          workspaceId,
+          channelType: 'DM',
+          participants,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return rejectWithValue(errorText || 'Failed to create direct message');
+      }
+
+      const data = await response.json();
+      return data as Channel;
+    } catch (error) {
+      console.error('Error creating direct message:', error);
+      return rejectWithValue(error instanceof Error ? error.message : 'Failed to create direct message');
+    }
+  }
+);
+
+
 // WebSocket event actions
 export const handleChannelCreated = createAction<Channel>('channel/handleChannelCreated');
 export const handleChannelUpdated = createAction<Channel>('channel/handleChannelUpdated');
@@ -147,6 +213,13 @@ const channelSlice = createSlice({
         }
       }
     },
+    handleDirectMessageCreated: (state, action) => {
+      const dm = action.payload;
+      const dmExists = state.dms.some(d => d.channelId === dm.channelId);
+      if (!dmExists && dm.channelType === 'DM') {
+        state.dms.push(dm);
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -174,6 +247,31 @@ const channelSlice = createSlice({
       .addCase(createChannel.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string || 'Failed to create channel';
+      })
+      .addCase(fetchDirectMessages.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchDirectMessages.fulfilled, (state, action) => {
+        state.loading = false;
+        state.dms = action.payload.filter((channel: Channel) => channel.channelType === 'DM');
+        state.error = null;
+      })
+      .addCase(fetchDirectMessages.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string || 'Failed to fetch direct messages';
+      })
+      .addCase(createDirectMessage.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(createDirectMessage.fulfilled, (state, action) => {
+        state.loading = false;
+        state.error = null;
+      })
+      .addCase(createDirectMessage.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string || 'Failed to create direct message';
       });
   },
 });
@@ -182,6 +280,7 @@ export const {
   setCurrentChannel,
   toggleShowArchived,
   clearChannels,
+  handleDirectMessageCreated,
 } = channelSlice.actions;
 
 export default channelSlice.reducer;

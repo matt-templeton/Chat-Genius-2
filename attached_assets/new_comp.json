@@ -87,7 +87,7 @@
 						          	]
 						          },
 						          {
-						          	"name": "ChannelDropdown",
+						          	"name": "ChannelDropdownButton",
 						          	"description": "Button that contains the 'Channel' header text and expands a dropdown options menu on click.",
 						          	"location": "right of chevron"
 						          }
@@ -119,26 +119,15 @@
 						        "is_root_component": false,
 						        "sub": [
 						          {
-						            "name": "DM Header Sorting Controls",
-						            "description": "Controls for sorting DMs in different orders such as by latest or frequently contacted.",
-						            "location": "Located within the DM List Header.",
-						            "user_interactions": [
-						              "Opens sorting options on click.",
-						              "Changes sorting order on selection."
-						            ],
-						            "is_root_component": true,
-						            "sub": []
+						          	"name": "DMHeaderChevron",
+						          	"description": "chevron that expands and collapses channel list.",
+						          	"location": "left"
 						          },
 						          {
-						            "name": "DM Notification Icon",
-						            "description": "Icon indicating unread messages or notifications within a DM Entry.",
-						            "location": "Overlaying the DM Entry, typically on the right side.",
-						            "user_interactions": [
-						              "Non-interactive, purely indicative."
-						            ],
-						            "is_root_component": true,
-						            "sub": []
-						          }						          						          
+						          	"name": "DMDropdownButton",
+						          	"description": "Header is a button that reveals DirectMessagesListDropdown",
+						          	"location": "top"
+						          }					          						          
 						        ]
 						      },
 						    {
@@ -178,6 +167,13 @@
 						"user_interactions": [
 							"User inputs text, emojis and attaches files for sending to chat."
 						],
+						"sub": [
+							{
+								"name": "MessageInputToolbar",
+								"description": "Tool icons for enhancing user messages. Includes buttons for attachments and emojis on the left, send button on the right",
+								"location": "Bottom of MessageInput, under text box. ",
+							}
+						]
 					},
 					{
 						"name": "ChannelHeader",
