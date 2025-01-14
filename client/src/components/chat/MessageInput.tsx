@@ -5,6 +5,8 @@ import { Send, Paperclip, Smile } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useToast } from "@/hooks/use-toast";
+import { useAppDispatch } from "@/store";
+import { createMessage } from "@/store/messageSlice";
 
 interface MessageInputProps {
   channelId: number;
@@ -16,56 +18,14 @@ export function MessageInput({ channelId, workspaceId }: MessageInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const dispatch = useAppDispatch();
 
   const { send } = useWebSocket({
     workspaceId,
     onMessageEvent: (event) => {
-      // Handle incoming message events
       if (event.type === "MESSAGE_CREATED" && event.data.channelId === channelId) {
-        // Invalidate the messages query to refresh the message list
         queryClient.invalidateQueries({ queryKey: [`/api/v1/channels/${channelId}/messages`] });
       }
-    },
-  });
-
-  const sendMessageMutation = useMutation({
-    mutationFn: async (content: string) => {
-      // Send message through REST API
-      const response = await fetch(`/api/v1/channels/${channelId}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ content }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to send message");
-      }
-
-      const data = await response.json();
-
-      // Broadcast message through WebSocket
-      send({
-        type: "MESSAGE_CREATED",
-        data: {
-          channelId,
-          ...data,
-        },
-      });
-
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/v1/channels/${channelId}/messages`] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: "Failed to send message. Please try again.",
-        variant: "destructive",
-      });
-      console.error("Failed to send message:", error);
     },
   });
 
@@ -73,9 +33,31 @@ export function MessageInput({ channelId, workspaceId }: MessageInputProps) {
     if (!message.trim()) return;
 
     try {
-      await sendMessageMutation.mutateAsync(message);
+      const result = await dispatch(createMessage({ 
+        channelId, 
+        content: message 
+      })).unwrap();
+
+      // Clear the input on success
       setMessage("");
+
+      // Broadcast message through WebSocket
+      send({
+        type: "MESSAGE_CREATED",
+        data: {
+          channelId,
+          ...result,
+        },
+      });
+
+      // Invalidate messages query to refresh the list
+      queryClient.invalidateQueries({ queryKey: [`/api/v1/channels/${channelId}/messages`] });
     } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to send message",
+        variant: "destructive",
+      });
       console.error("Failed to send message:", error);
     }
   };
@@ -103,7 +85,6 @@ export function MessageInput({ channelId, workspaceId }: MessageInputProps) {
           placeholder="Type your message..."
           className="min-h-[60px] resize-none pr-20"
           rows={1}
-          disabled={sendMessageMutation.isPending}
         />
         <div className="absolute bottom-2 right-2 flex gap-2">
           <Button variant="ghost" size="icon">
@@ -114,7 +95,7 @@ export function MessageInput({ channelId, workspaceId }: MessageInputProps) {
           </Button>
           <Button 
             onClick={handleSendMessage} 
-            disabled={!message.trim() || sendMessageMutation.isPending}
+            disabled={!message.trim()}
             size="icon"
           >
             <Send className="h-4 w-4" />

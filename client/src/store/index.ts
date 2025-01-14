@@ -4,12 +4,14 @@ import { useDispatch, useSelector } from 'react-redux';
 import authReducer from './slices/auth-slice';
 import channelReducer from './channelSlice';
 import workspaceReducer from './workspaceSlice';
+import messageReducer from './messageSlice';
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
     channel: channelReducer,
     workspace: workspaceReducer,
+    message: messageReducer,
   },
 });
 
