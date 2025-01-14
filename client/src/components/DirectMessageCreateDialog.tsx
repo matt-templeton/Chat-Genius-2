@@ -46,6 +46,15 @@ export function DirectMessageCreateDialog({
     const fetchMembers = async () => {
       try {
         const token = localStorage.getItem('accessToken');
+        if (!token) {
+          toast({
+            title: "Authentication Error",
+            description: "Please log in again to continue.",
+            variant: "destructive",
+          });
+          return;
+        }
+
         const response = await fetch(`/api/v1/workspaces/${workspaceId}/members`, {
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -53,14 +62,15 @@ export function DirectMessageCreateDialog({
         });
 
         if (!response.ok) {
-          throw new Error('Failed to fetch workspace members');
+          const errorData = await response.json();
+          throw new Error(errorData.details?.message || 'Failed to fetch workspace members');
         }
 
         const data = await response.json();
         // Filter out the current user and format for ComboBox
         const currentUser = localStorage.getItem('userId');
         const memberOptions = data
-          .filter((member: any) => member.userId !== currentUser)
+          .filter((member: any) => member.userId.toString() !== currentUser)
           .map((member: any) => ({
             label: member.displayName,
             value: member.displayName,
