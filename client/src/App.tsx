@@ -19,6 +19,9 @@ function Router() {
 
       {/* Protected routes */}
       <Route path="/chat" component={ChatPage} />
+      <Route path="/chat/:workspaceId" component={ChatPage} />
+      <Route path="/chat/:workspaceId/:channelId" component={ChatPage} />
+
       {/* Default route */}
       <Route path="/">
         {() => {
