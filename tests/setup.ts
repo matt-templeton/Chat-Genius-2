@@ -1,4 +1,3 @@
-
 declare global {
   namespace NodeJS {
     interface Global {
@@ -113,5 +112,5 @@ afterAll(async () => {
     });
   }
   // Close database connection
-  await db.end();
+  // await db.();
 }, 10000);

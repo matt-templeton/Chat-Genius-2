@@ -9,6 +9,11 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// ... other imports and code ...
+declare global {
+  var server: any;
+}
+// ... other code ...
 global.server = registerRoutes(app);
 const request = supertest(app);
 
