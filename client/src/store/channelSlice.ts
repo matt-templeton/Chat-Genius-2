@@ -105,7 +105,12 @@ export const fetchDirectMessages = createAsyncThunk(
   async ({ workspaceId }: { workspaceId: number }, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`/api/v1/workspaces/${workspaceId}/dms`, {
+      if (!token) {
+        return rejectWithValue('Authentication required');
+      }
+
+      // Use the regular channels endpoint but filter for DMs on the client side
+      const response = await fetch(`/api/v1/workspaces/${workspaceId}/channels`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         }
@@ -117,7 +122,9 @@ export const fetchDirectMessages = createAsyncThunk(
       }
 
       const data = await response.json();
-      return data || [];
+      // Filter to only include DM channels
+      const dmChannels = data.filter((channel: Channel) => channel.channelType === 'DM');
+      return dmChannels;
     } catch (error) {
       console.error('Error fetching direct messages:', error);
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to fetch direct messages');
@@ -132,58 +139,31 @@ export const createDirectMessage = createAsyncThunk(
     participants: number[]
   }, { rejectWithValue }) => {
     try {
-      // Validate input
-      if (!participants.length) {
-        return rejectWithValue('No participants selected');
-      }
-
       const token = localStorage.getItem('accessToken');
       if (!token) {
         return rejectWithValue('Authentication required');
       }
 
-      console.log('Creating DM with participants:', participants);
-
-      const requestData = {
-        name: `dm-${Date.now()}`, // Unique name for the DM channel
-        workspaceId,
-        channelType: 'DM',
-        topic: 'Direct Message Channel',
-        participants,
-      };
-
-      console.log('Request payload:', requestData);
-
-      const response = await fetch('/api/v1/channels', {
+      const response = await fetch('/api/v1/channels/dm', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        credentials: 'include',
-        body: JSON.stringify(requestData),
+        body: JSON.stringify({
+          workspaceId,
+          participants
+        }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('Failed to create direct message:', {
-          status: response.status,
-          statusText: response.statusText,
-          errorData
-        });
         return rejectWithValue(errorData.details?.message || 'Failed to create direct message');
       }
 
       const data = await response.json();
-      if (!data) {
-        console.error('No data returned from channel creation');
-        return rejectWithValue('No data returned from server');
-      }
-
-      console.log('Channel created successfully:', data);
-      return data as Channel;
+      return data;
     } catch (error) {
-      console.error('Error creating direct message:', error);
       return rejectWithValue(error instanceof Error ? error.message : 'Failed to create direct message');
     }
   }
@@ -324,7 +304,7 @@ const channelSlice = createSlice({
       })
       .addCase(fetchDirectMessages.fulfilled, (state, action) => {
         state.loading = false;
-        state.dms = action.payload.filter((channel: Channel) => channel.channelType === 'DM');
+        state.dms = action.payload;
         state.error = null;
       })
       .addCase(fetchDirectMessages.rejected, (state, action) => {

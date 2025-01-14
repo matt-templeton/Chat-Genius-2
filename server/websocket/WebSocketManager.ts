@@ -147,8 +147,6 @@ export class WebSocketManager {
       log("Invalid workspace ID for broadcast");
       return;
     }
-    console.log("Broadcasting to workspace:", workspaceId);
-    console.log("Event:", event);
     const message = JSON.stringify({
       ...event,
       timestamp: new Date().toISOString(),

@@ -33,6 +33,12 @@ interface WebSocketChannelEvent {
   };
 }
 
+// Add interface for channel member
+interface ChannelMember {
+  userId: number;
+  displayName: string;
+}
+
 const useCurrentUser = () => {
   return parseInt(localStorage.getItem('userId') || '0');
 };
@@ -46,6 +52,7 @@ export function DirectMessagesList() {
   const currentWorkspace = useAppSelector(state => state.workspace.currentWorkspace);
   const { dms = [], loading, currentChannel } = useAppSelector(state => state.channel);
   const currentUserId = useCurrentUser();
+  const [channelMembers, setChannelMembers] = useState<Record<number, ChannelMember[]>>({});
 
   // Memoize the WebSocket event handler
   const handleWebSocketEvent = useCallback((event: WebSocketChannelEvent) => {
@@ -75,6 +82,62 @@ export function DirectMessagesList() {
       dispatch(fetchDirectMessages({ workspaceId: currentWorkspace.workspaceId }));
     }
   }, [currentWorkspace?.workspaceId, dispatch]);
+
+  // Add function to fetch channel members
+  const fetchChannelMembers = async (channelId: number) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(`/api/v1/channels/${channelId}/members`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch channel members');
+      }
+
+      const members = await response.json();
+      setChannelMembers(prev => ({
+        ...prev,
+        [channelId]: members
+      }));
+    } catch (error) {
+      console.error(`Error fetching members for channel ${channelId}:`, error);
+    }
+  };
+
+  // Fetch members for each DM channel
+  useEffect(() => {
+    dms.forEach(dm => {
+      if (!channelMembers[dm.channelId]) {
+        fetchChannelMembers(dm.channelId);
+      }
+    });
+  }, [dms]);
+
+  // Helper function to get other participant's name
+  const getOtherParticipantName = (channelId: number): string => {
+    const members = channelMembers[channelId] || [];
+    if (members.length === 0) {
+      return "Loading...";
+    }
+
+    const otherMember = members.find(member => member.userId !== currentUserId);
+    if (!otherMember) {
+      return "No participants";
+    }
+
+    return otherMember.displayName;
+  };
+
+  // Helper function to get avatar letter
+  const getAvatarLetter = (channelId: number): string => {
+    const name = getOtherParticipantName(channelId);
+    return name === "Loading..." || name === "No participants" 
+      ? "?" 
+      : name[0].toUpperCase();
+  };
 
   const handleDmSelect = (channelId: number) => {
     const selectedDm = dms.find(dm => dm.channelId === channelId);
@@ -166,19 +229,11 @@ export function DirectMessagesList() {
               >
                 <Avatar className="h-6 w-6">
                   <AvatarFallback>
-                    {dm.participants && dm.participants.length > 0 
-                      ? dm.participants.find(name => 
-                          name !== currentWorkspace?.currentMember?.displayName
-                        )?.[0]?.toUpperCase() || '?'
-                      : '?'}
+                    {getAvatarLetter(dm.channelId)}
                   </AvatarFallback>
                 </Avatar>
                 <span className="truncate">
-                  {dm.participants && dm.participants.length > 0 
-                    ? dm.participants.find(name => 
-                        name !== currentWorkspace?.currentMember?.displayName
-                      ) || "No participants"
-                    : "No participants"}
+                  {getOtherParticipantName(dm.channelId)}
                 </span>
                 {dm.lastMessage && (
                   <span className="ml-auto text-xs text-muted-foreground truncate">
@@ -188,13 +243,7 @@ export function DirectMessagesList() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right" align="center">
-              View conversation with {
-                dm.participants && dm.participants.length > 0 
-                  ? dm.participants.find(name => 
-                      name !== currentWorkspace?.currentMember?.displayName
-                    ) || "No participants"
-                  : "No participants"
-              }
+              View conversation with {getOtherParticipantName(dm.channelId)}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

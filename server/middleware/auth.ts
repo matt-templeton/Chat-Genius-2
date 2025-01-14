@@ -17,9 +17,9 @@ declare global {
       userId: number;
       email: string;
       displayName: string;
-      emailVerified: boolean;
-      deactivated: boolean;
-      lastKnownPresence: "ONLINE" | "AWAY" | "DND" | "OFFLINE";
+      emailVerified: boolean | null;
+      deactivated: boolean | null;
+      lastKnownPresence: "ONLINE" | "AWAY" | "DND" | "OFFLINE" | null;
     }
   }
 }
@@ -149,7 +149,13 @@ export const isAuthenticated = async (
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'No token provided' });
+      return res.status(401).json({
+        error: "Unauthorized",
+        details: {
+          code: "UNAUTHORIZED",
+          message: "No token provided"
+        }
+      });
     }
 
     const token = authHeader.split(' ')[1];
@@ -160,16 +166,34 @@ export const isAuthenticated = async (
     });
 
     if (!user) {
-      return res.status(401).json({ message: 'User not found' });
+      return res.status(401).json({
+        error: "Unauthorized",
+        details: {
+          code: "UNAUTHORIZED",
+          message: "User not found"
+        }
+      });
     }
 
     req.user = user;
     next();
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {
-      return res.status(401).json({ message: 'Token expired' });
+      return res.status(401).json({
+        error: "Unauthorized",
+        details: {
+          code: "UNAUTHORIZED",
+          message: "Token expired"
+        }
+      });
     }
-    return res.status(401).json({ message: 'Invalid token' });
+    return res.status(401).json({
+      error: "Unauthorized",
+      details: {
+        code: "UNAUTHORIZED",
+        message: "Invalid token"
+      }
+    });
   }
 };
 

@@ -570,16 +570,211 @@ describe('Channel Endpoints', () => {
     });
   });
 
+  describe('POST /api/v1/channels/dm', () => {
+    beforeEach(async () => {
+      // We already have testUser and testMember set up from the parent beforeEach
+    });
+
+    it('should create a new DM channel between two users', async () => {
+      const response = await request
+        .post('/api/v1/channels/dm')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          workspaceId: testWorkspace.workspaceId,
+          participants: [testMember.userId]
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty('channelId');
+      expect(response.body).toHaveProperty('channelType', 'DM');
+      expect(response.body).toHaveProperty('workspaceId', testWorkspace.workspaceId);
+
+      // Verify channel creation in database
+      const channel = await db.query.channels.findFirst({
+        where: eq(channels.channelId, response.body.channelId)
+      });
+      expect(channel).toBeDefined();
+      expect(channel?.channelType).toBe('DM');
+
+      // Verify both users were added as channel members
+      const memberships = await db.query.userChannels.findMany({
+        where: eq(userChannels.channelId, response.body.channelId)
+      });
+      expect(memberships).toHaveLength(2);
+      const memberIds = memberships.map(m => m.userId);
+      expect(memberIds).toContain(testUser.userId);
+      expect(memberIds).toContain(testMember.userId);
+    });
+
+    it('should return existing DM channel if one already exists', async () => {
+      // First create a DM channel
+      const firstResponse = await request
+        .post('/api/v1/channels/dm')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          workspaceId: testWorkspace.workspaceId,
+          participants: [testMember.userId]
+        });
+
+      expect(firstResponse.status).toBe(201);
+      const firstChannelId = firstResponse.body.channelId;
+
+      // Try to create another DM channel with the same participants
+      const secondResponse = await request
+        .post('/api/v1/channels/dm')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          workspaceId: testWorkspace.workspaceId,
+          participants: [testMember.userId]
+        });
+
+      expect(secondResponse.status).toBe(200);
+      expect(secondResponse.body.channelId).toBe(firstChannelId);
+    });
+
+    it('should return 401 without authentication', async () => {
+      const response = await request
+        .post('/api/v1/channels/dm')
+        .send({
+          workspaceId: testWorkspace.workspaceId,
+          participants: [testMember.userId]
+        });
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('UNAUTHORIZED');
+    });
+
+    it('should return 400 with invalid data', async () => {
+      const response = await request
+        .post('/api/v1/channels/dm')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          workspaceId: testWorkspace.workspaceId,
+          // Missing participants array
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('should return 400 when participant is not a workspace member', async () => {
+      // Create a user who is not a workspace member
+      const [nonMember] = await db.insert(users)
+        .values({
+          email: `non.member.${Date.now()}@example.com`,
+          passwordHash: await bcrypt.hash(testPassword, 10),
+          displayName: 'Non Member',
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      const response = await request
+        .post('/api/v1/channels/dm')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          workspaceId: testWorkspace.workspaceId,
+          participants: [nonMember.userId]
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('INVALID_PARTICIPANTS');
+
+      // Clean up
+      await db.delete(users)
+        .where(eq(users.userId, nonMember.userId));
+    });
+
+    it('should handle multiple participants gracefully', async () => {
+      // Create another test member
+      const [thirdMember] = await db.insert(users)
+        .values({
+          email: `third.member.${Date.now()}@example.com`,
+          passwordHash: await bcrypt.hash(testPassword, 10),
+          displayName: 'Third Member',
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      // Add third member to workspace
+      await db.insert(userWorkspaces)
+        .values({
+          userId: thirdMember.userId,
+          workspaceId: testWorkspace.workspaceId,
+          role: 'MEMBER',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+
+      const response = await request
+        .post('/api/v1/channels/dm')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          workspaceId: testWorkspace.workspaceId,
+          participants: [testMember.userId, thirdMember.userId]
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty('channelId');
+
+      // Verify all three users were added as channel members
+      const memberships = await db.query.userChannels.findMany({
+        where: eq(userChannels.channelId, response.body.channelId)
+      });
+      expect(memberships).toHaveLength(3);
+
+      // Clean up in correct order
+      await db.delete(userChannels)
+        .where(eq(userChannels.userId, thirdMember.userId));
+      await db.delete(userWorkspaces)
+        .where(eq(userWorkspaces.userId, thirdMember.userId));
+      await db.delete(users)
+        .where(eq(users.userId, thirdMember.userId));
+    });
+
+    it('should not create DM channel in non-existent workspace', async () => {
+      const response = await request
+        .post('/api/v1/channels/dm')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          workspaceId: 99999,
+          participants: [testMember.userId]
+        });
+
+      expect(response.status).toBe(404);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('WORKSPACE_NOT_FOUND');
+    });
+  });
+
   afterEach(async () => {
     try {
       // Clean up test data in reverse order of creation
       if (testChannel?.channelId) {
+        // Delete UserChannels records first
         await db.delete(userChannels)
           .where(eq(userChannels.channelId, testChannel.channelId));
         await db.delete(channels)
           .where(eq(channels.channelId, testChannel.channelId));
       }
 
+      // Delete all UserChannels records for test users
+      if (testUser?.userId) {
+        await db.delete(userChannels)
+          .where(eq(userChannels.userId, testUser.userId));
+      }
+      if (testMember?.userId) {
+        await db.delete(userChannels)
+          .where(eq(userChannels.userId, testMember.userId));
+      }
+
+      // Then delete workspace relationships
       if (testWorkspace?.workspaceId) {
         await db.delete(userWorkspaces)
           .where(eq(userWorkspaces.workspaceId, testWorkspace.workspaceId));
@@ -587,11 +782,11 @@ describe('Channel Endpoints', () => {
           .where(eq(workspaces.workspaceId, testWorkspace.workspaceId));
       }
 
+      // Finally delete users
       if (testUser?.userId) {
         await db.delete(users)
           .where(eq(users.userId, testUser.userId));
       }
-
       if (testMember?.userId) {
         await db.delete(users)
           .where(eq(users.userId, testMember.userId));

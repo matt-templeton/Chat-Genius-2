@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from "@db";
-import { channels, userChannels, workspaces, users } from "@db/schema";
+import { channels, userChannels, userWorkspaces, workspaces, users } from "@db/schema";
 import { eq, and } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
@@ -24,6 +24,111 @@ const updateChannelSchema = z.object({
 
 const addMemberSchema = z.object({
   userId: z.number().int().positive("Valid user ID is required")
+});
+
+// Add this validation schema for DM creation
+const createDmSchema = z.object({
+  workspaceId: z.number().int().positive("Valid workspace ID is required"),
+  participants: z.array(z.number().int().positive("Valid user IDs required"))
+});
+
+/**
+ * @route POST /api/v1/channels/dm
+ * @desc Create a new DM channel
+ */
+router.post('/dm', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const validationResult = createDmSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid DM creation data",
+          errors: validationResult.error.errors
+        }
+      });
+    }
+
+    const { workspaceId, participants } = validationResult.data;
+    const currentUserId = req.user!.userId;
+
+    // Add current user to participants if not included
+    const allParticipants = Array.from(new Set([currentUserId, ...participants]));
+
+    // Verify workspace exists
+    const workspace = await db.query.workspaces.findFirst({
+      where: eq(workspaces.workspaceId, workspaceId)
+    });
+
+    if (!workspace) {
+      return res.status(404).json({
+        error: "Workspace Not Found",
+        details: {
+          code: "WORKSPACE_NOT_FOUND",
+          message: "Workspace not found"
+        }
+      });
+    }
+
+    // Verify all participants are workspace members
+    const workspaceMembers = await db.query.userWorkspaces.findMany({
+      where: eq(userWorkspaces.workspaceId, workspaceId)
+    });
+
+    const memberIds = workspaceMembers.map(member => member.userId);
+    const nonMembers = allParticipants.filter(id => !memberIds.includes(id));
+
+    if (nonMembers.length > 0) {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: {
+          code: "INVALID_PARTICIPANTS",
+          message: "Some participants are not members of this workspace"
+        }
+      });
+    }
+
+    // Check for existing DM channel between these users
+    const existingDm = await findExistingDmChannel(workspaceId, allParticipants);
+    if (existingDm) {
+      return res.json(existingDm);
+    }
+
+    // Create new DM channel
+    const [channel] = await db.insert(channels).values({
+      name: `dm-${Date.now()}`,
+      workspaceId,
+      channelType: 'DM',
+      archived: false,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }).returning();
+
+    // Add all participants to the channel
+    await Promise.all(allParticipants.map(userId =>
+      db.insert(userChannels).values({
+        userId,
+        channelId: channel.channelId,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      })
+    ));
+
+    // Broadcast channel creation event
+    broadcastChannelEvent(channel, 'CHANNEL_CREATED');
+
+    res.status(201).json(channel);
+  } catch (error) {
+    console.error('Error creating DM channel:', error);
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: {
+        code: "SERVER_ERROR",
+        message: "Failed to create DM channel"
+      }
+    });
+  }
 });
 
 /**
@@ -470,6 +575,33 @@ function broadcastChannelEvent(channel: any, eventType: 'CHANNEL_CREATED' | 'CHA
       }
     });
   }
+}
+
+// Add this new function to check for existing DM
+async function findExistingDmChannel(workspaceId: number, userIds: number[]) {
+  // Get all DM channels in the workspace
+  const dmChannels = await db.query.channels.findMany({
+    where: and(
+      eq(channels.workspaceId, workspaceId),
+      eq(channels.channelType, 'DM'),
+      eq(channels.archived, false)
+    )
+  });
+
+  // For each DM channel, check if it contains exactly these users
+  for (const channel of dmChannels) {
+    const channelMembers = await db.query.userChannels.findMany({
+      where: eq(userChannels.channelId, channel.channelId)
+    });
+
+    const memberIds = channelMembers.map(member => member.userId);
+    if (memberIds.length === userIds.length && 
+        userIds.every(id => memberIds.includes(id))) {
+      return channel;
+    }
+  }
+
+  return null;
 }
 
 export { router as channelRouter };
