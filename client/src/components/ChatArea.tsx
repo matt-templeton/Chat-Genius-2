@@ -132,6 +132,7 @@ export function ChatArea() {
         content: event.data.content,
         postedAt: event.data.createdAt,
         createdAt: event.data.createdAt,
+        updatedAt: event.data.createdAt,
         deleted: false
       };
 

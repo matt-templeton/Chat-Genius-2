@@ -21,6 +21,10 @@ import { useWebSocket } from "@/hooks/useWebSocket";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 
+const useCurrentUser = () => {
+  return parseInt(localStorage.getItem('userId') || '0');
+};
+
 export function DirectMessagesList() {
   const [isExpanded, setIsExpanded] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -29,6 +33,7 @@ export function DirectMessagesList() {
 
   const currentWorkspace = useAppSelector(state => state.workspace.currentWorkspace);
   const { dms = [], loading, currentChannel } = useAppSelector(state => state.channel);
+  const currentUserId = useCurrentUser();
 
   // Memoize the WebSocket event handler
   const handleWebSocketEvent = useCallback((event: any) => {
@@ -146,11 +151,19 @@ export function DirectMessagesList() {
               >
                 <Avatar className="h-6 w-6">
                   <AvatarFallback>
-                    {dm.participants?.[0]?.charAt(0).toUpperCase() || '?'}
+                    {dm.participants && dm.participants.length > 0 
+                      ? dm.participants.find(name => 
+                          name !== currentWorkspace?.currentMember?.displayName
+                        )?.[0]?.toUpperCase() || '?'
+                      : '?'}
                   </AvatarFallback>
                 </Avatar>
                 <span className="truncate">
-                  {dm.participants?.join(", ") || "No participants"}
+                  {dm.participants && dm.participants.length > 0 
+                    ? dm.participants.find(name => 
+                        name !== currentWorkspace?.currentMember?.displayName
+                      ) || "No participants"
+                    : "No participants"}
                 </span>
                 {dm.lastMessage && (
                   <span className="ml-auto text-xs text-muted-foreground truncate">
@@ -160,7 +173,13 @@ export function DirectMessagesList() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right" align="center">
-              View conversation with {dm.participants?.join(", ") || "No participants"}
+              View conversation with {
+                dm.participants && dm.participants.length > 0 
+                  ? dm.participants.find(name => 
+                      name !== currentWorkspace?.currentMember?.displayName
+                    ) || "No participants"
+                  : "No participants"
+              }
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

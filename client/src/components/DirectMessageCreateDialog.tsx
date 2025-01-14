@@ -109,7 +109,7 @@ export function DirectMessageCreateDialog({
         participants: [selectedMember.userId]
       })).unwrap();
 
-      console.log('DM creation result:', result);
+      console.log('Created DM channel:', result);
 
       toast({
         title: "Direct message created",
