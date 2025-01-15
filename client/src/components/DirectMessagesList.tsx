@@ -36,7 +36,16 @@ interface WebSocketChannelEvent {
 // Add interface for channel member
 interface ChannelMember {
   userId: number;
+  profilePicture: string | null;
   displayName: string;
+}
+
+interface DmChannel extends Channel {
+  otherParticipants?: Array<{
+    userId: number;
+    displayName: string;
+    profilePicture: string | null;
+  }>;
 }
 
 const useCurrentUser = () => {
@@ -48,11 +57,69 @@ export function DirectMessagesList() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const dispatch = useAppDispatch();
   const [, setLocation] = useLocation();
+  const { user } = useAppSelector(state => state.auth);
 
   const currentWorkspace = useAppSelector(state => state.workspace.currentWorkspace);
   const { dms = [], loading, currentChannel } = useAppSelector(state => state.channel);
-  const currentUserId = useCurrentUser();
-  const [channelMembers, setChannelMembers] = useState<Record<number, ChannelMember[]>>({});
+  const [enrichedDms, setEnrichedDms] = useState<DmChannel[]>([]);
+
+  // Fetch channel members for a DM
+  const fetchChannelMembers = useCallback(async (channelId: number) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(`/api/v1/channels/${channelId}/members`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch channel members');
+      }
+
+      const members: ChannelMember[] = await response.json();
+      return members;
+    } catch (error) {
+      console.error(`Error fetching members for channel ${channelId}:`, error);
+      return null;
+    }
+  }, []);
+
+  // Update DMs with other participant info
+  useEffect(() => {
+    const enrichDms = async () => {
+      if (!user) {
+        console.log('No user found in DirectMessagesList:', user);
+        return;
+      }
+      console.log('Current user in DirectMessagesList:', user);
+
+      const enrichedChannels = await Promise.all(
+        dms.map(async (dm) => {
+          const members = await fetchChannelMembers(dm.channelId);
+          if (!members) return dm;
+
+          console.log('Channel members:', members);
+          console.log('Filtering out current user ID:', user.userId);
+          
+          const otherParticipants = members.filter(member => {
+            const isCurrentUser = member.userId === user.userId;
+            console.log(`Member ${member.displayName} (${member.userId}) is current user? ${isCurrentUser}`);
+            return !isCurrentUser;
+          });
+
+          return {
+            ...dm,
+            otherParticipants
+          };
+        })
+      );
+
+      setEnrichedDms(enrichedChannels);
+    };
+
+    enrichDms();
+  }, [dms, user, fetchChannelMembers]);
 
   // Memoize the WebSocket event handler
   const handleWebSocketEvent = useCallback((event: WebSocketChannelEvent) => {
@@ -83,64 +150,8 @@ export function DirectMessagesList() {
     }
   }, [currentWorkspace?.workspaceId, dispatch]);
 
-  // Add function to fetch channel members
-  const fetchChannelMembers = async (channelId: number) => {
-    try {
-      const token = localStorage.getItem('accessToken');
-      const response = await fetch(`/api/v1/channels/${channelId}/members`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch channel members');
-      }
-
-      const members = await response.json();
-      setChannelMembers(prev => ({
-        ...prev,
-        [channelId]: members
-      }));
-    } catch (error) {
-      console.error(`Error fetching members for channel ${channelId}:`, error);
-    }
-  };
-
-  // Fetch members for each DM channel
-  useEffect(() => {
-    dms.forEach(dm => {
-      if (!channelMembers[dm.channelId]) {
-        fetchChannelMembers(dm.channelId);
-      }
-    });
-  }, [dms]);
-
-  // Helper function to get other participant's name
-  const getOtherParticipantName = (channelId: number): string => {
-    const members = channelMembers[channelId] || [];
-    if (members.length === 0) {
-      return "Loading...";
-    }
-
-    const otherMember = members.find(member => member.userId !== currentUserId);
-    if (!otherMember) {
-      return "No participants";
-    }
-
-    return otherMember.displayName;
-  };
-
-  // Helper function to get avatar letter
-  const getAvatarLetter = (channelId: number): string => {
-    const name = getOtherParticipantName(channelId);
-    return name === "Loading..." || name === "No participants" 
-      ? "?" 
-      : name[0].toUpperCase();
-  };
-
   const handleDmSelect = (channelId: number) => {
-    const selectedDm = dms.find(dm => dm.channelId === channelId);
+    const selectedDm = enrichedDms.find(dm => dm.channelId === channelId);
     if (selectedDm) {
       dispatch(setCurrentChannel(selectedDm));
       setLocation(`/chat/${currentWorkspace?.workspaceId}/${channelId}`);
@@ -213,7 +224,7 @@ export function DirectMessagesList() {
       />
 
       {/* DM List */}
-      {isExpanded && dms.map((dm) => (
+      {isExpanded && enrichedDms.map((dm) => (
         <TooltipProvider key={`dm-${dm.channelId}`}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -229,11 +240,14 @@ export function DirectMessagesList() {
               >
                 <Avatar className="h-6 w-6">
                   <AvatarFallback>
-                    {getAvatarLetter(dm.channelId)}
+                    {dm.otherParticipants?.[0]?.displayName?.[0]?.toUpperCase() || '?'}
                   </AvatarFallback>
                 </Avatar>
                 <span className="truncate">
-                  {getOtherParticipantName(dm.channelId)}
+                  {dm.otherParticipants
+                    ?.filter(p => p.userId !== user?.id)
+                    ?.map(p => p.displayName)
+                    .join(', ') || "Loading..."}
                 </span>
                 {dm.lastMessage && (
                   <span className="ml-auto text-xs text-muted-foreground truncate">
@@ -243,13 +257,16 @@ export function DirectMessagesList() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right" align="center">
-              View conversation with {getOtherParticipantName(dm.channelId)}
+              View conversation with {dm.otherParticipants
+                ?.filter(p => p.userId !== user?.userId)
+                ?.map(p => p.displayName)
+                .join(', ') || "Loading..."}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       ))}
 
-      {isExpanded && dms.length === 0 && (
+      {isExpanded && enrichedDms.length === 0 && (
         <div className="px-2 py-1.5 text-sm text-muted-foreground">
           No direct messages yet
         </div>

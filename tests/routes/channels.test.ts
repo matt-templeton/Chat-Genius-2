@@ -753,6 +753,218 @@ describe('Channel Endpoints', () => {
     });
   });
 
+  describe('GET /api/v1/channels/{channelId}/members', () => {
+    beforeEach(async () => {
+      // Create a test channel
+      const [channel] = await db.insert(channels)
+        .values({
+          name: 'test-channel-members',
+          workspaceId: testWorkspace.workspaceId,
+          topic: 'Member listing test channel',
+          channelType: 'PUBLIC',
+          archived: false,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      expect(channel).toBeDefined();
+      expect(channel.channelId).toBeDefined();
+      testChannel = channel;
+
+      // Add test user as channel member
+      await db.insert(userChannels)
+        .values({
+          userId: testUser.userId,
+          channelId: channel.channelId,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+
+      // Add test member to channel
+      await db.insert(userChannels)
+        .values({
+          userId: testMember.userId,
+          channelId: channel.channelId,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+    });
+
+    it('should return list of channel members', async () => {
+      const response = await request
+        .get(`/api/v1/channels/${testChannel.channelId}/members`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toHaveLength(2);
+      
+      // Verify member structure
+      response.body.forEach((member: any) => {
+        expect(member).toHaveProperty('userId');
+        expect(member).toHaveProperty('displayName');
+        expect(member).toHaveProperty('profilePicture');
+      });
+
+      // Verify both users are present
+      const memberIds = response.body.map((m: any) => m.userId);
+      expect(memberIds).toContain(testUser.userId);
+      expect(memberIds).toContain(testMember.userId);
+    });
+
+    it('should return 404 for non-existent channel', async () => {
+      const response = await request
+        .get('/api/v1/channels/99999/members')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('CHANNEL_NOT_FOUND');
+    });
+
+    it('should return 401 without authentication', async () => {
+      const response = await request
+        .get(`/api/v1/channels/${testChannel.channelId}/members`);
+
+      expect(response.status).toBe(401);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('UNAUTHORIZED');
+    });
+
+    it('should return 403 if user is not a workspace member', async () => {
+      // Create a new user who isn't a workspace member
+      const [nonMember] = await db.insert(users)
+        .values({
+          email: `non.member.${Date.now()}@example.com`,
+          passwordHash: await bcrypt.hash(testPassword, 10),
+          displayName: 'Non Member',
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      // Login as non-member
+      const loginResponse = await request
+        .post('/api/v1/auth/login')
+        .send({
+          email: nonMember.email,
+          password: testPassword
+        });
+
+      const nonMemberToken = loginResponse.body.accessToken;
+
+      const response = await request
+        .get(`/api/v1/channels/${testChannel.channelId}/members`)
+        .set('Authorization', `Bearer ${nonMemberToken}`);
+
+      expect(response.status).toBe(403);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('NOT_WORKSPACE_MEMBER');
+
+      // Clean up
+      await db.delete(users)
+        .where(eq(users.userId, nonMember.userId));
+    });
+
+    it('should return 403 if user is workspace member but not channel member', async () => {
+      // Create a new user who is workspace member but not channel member
+      const [workspaceMember] = await db.insert(users)
+        .values({
+          email: `workspace.member.${Date.now()}@example.com`,
+          passwordHash: await bcrypt.hash(testPassword, 10),
+          displayName: 'Workspace Member',
+          emailVerified: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      // Add to workspace but not channel
+      await db.insert(userWorkspaces)
+        .values({
+          userId: workspaceMember.userId,
+          workspaceId: testWorkspace.workspaceId,
+          role: 'MEMBER',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+
+      // Login as workspace member
+      const loginResponse = await request
+        .post('/api/v1/auth/login')
+        .send({
+          email: workspaceMember.email,
+          password: testPassword
+        });
+
+      const workspaceMemberToken = loginResponse.body.accessToken;
+
+      const response = await request
+        .get(`/api/v1/channels/${testChannel.channelId}/members`)
+        .set('Authorization', `Bearer ${workspaceMemberToken}`);
+
+      expect(response.status).toBe(403);
+      expect(response.body).toHaveProperty('error');
+      expect(response.body.details.code).toBe('NOT_CHANNEL_MEMBER');
+
+      // Clean up
+      await db.delete(userWorkspaces)
+        .where(eq(userWorkspaces.userId, workspaceMember.userId));
+      await db.delete(users)
+        .where(eq(users.userId, workspaceMember.userId));
+    });
+
+    it('should handle archived channels', async () => {
+      // Archive the channel
+      await db.update(channels)
+        .set({ archived: true })
+        .where(eq(channels.channelId, testChannel.channelId));
+
+      const response = await request
+        .get(`/api/v1/channels/${testChannel.channelId}/members`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      // Should still return members even if channel is archived
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toHaveLength(2);
+    });
+
+    it('should handle channels with no members', async () => {
+      // Create empty channel
+      const [emptyChannel] = await db.insert(channels)
+        .values({
+          name: 'empty-channel',
+          workspaceId: testWorkspace.workspaceId,
+          channelType: 'PUBLIC',
+          archived: false,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      // Add test user as only member
+      await db.insert(userChannels)
+        .values({
+          userId: testUser.userId,
+          channelId: emptyChannel.channelId,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+
+      const response = await request
+        .get(`/api/v1/channels/${emptyChannel.channelId}/members`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body).toHaveLength(1);
+      expect(response.body[0].userId).toBe(testUser.userId);
+    });
+  });
+
   afterEach(async () => {
     try {
       // Clean up test data in reverse order of creation

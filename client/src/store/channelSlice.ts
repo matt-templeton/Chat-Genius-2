@@ -11,6 +11,11 @@ export interface Channel {
   participants?: string[];
   lastMessage?: string;
   createdAt: string;
+  otherParticipants?: Array<{
+    userId: number;
+    displayName: string;
+    profilePicture: string | null;
+  }>;
 }
 
 interface ChannelState {

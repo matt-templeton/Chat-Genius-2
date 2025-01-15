@@ -6,13 +6,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Paperclip, Smile, Send } from "lucide-react";
+import { Paperclip, Smile, Send, Hash } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { queryClient } from "@/lib/queryClient";
-import { useAppDispatch } from "@/store";
+import { useAppDispatch, useAppSelector } from "@/store";
 import { createMessage } from "@/store/messageSlice";
 import { Message } from "@/types/message";
 import { useToast } from "@/hooks/use-toast";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Message as MessageComponent } from "@/components/Message";
 
 // interface Message {
 //   messageId: number;
@@ -34,6 +36,11 @@ interface Channel {
   topic?: string;
   channelType: 'PUBLIC' | 'PRIVATE' | 'DM';
   archived: boolean;
+  otherParticipants?: Array<{
+    userId: number;
+    displayName: string;
+    profilePicture: string | null;
+  }>;
 }
 
 interface WebSocketMessageEvent {
@@ -46,6 +53,9 @@ interface WebSocketMessageEvent {
     userId: number;
     workspaceId: number;
     createdAt: string;
+    user: {
+      displayName: string;
+    };
   };
 }
 
@@ -57,11 +67,19 @@ export function ChatArea() {
   const [realtimeMessages, setRealtimeMessages] = useState<Message[]>([]);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAppSelector(state => state.auth);
 
   // Fetch channel details
   const { data: channel } = useQuery<Channel>({
     queryKey: [`/api/v1/channels/${channelId}`],
     enabled: Boolean(channelId),
+    onSuccess: (data) => {
+      console.log('Channel data received:', {
+        channelId: data?.channelId,
+        channelType: data?.channelType,
+        otherParticipants: data?.otherParticipants,
+      });
+    }
   });
 
   // Fetch messages
@@ -133,7 +151,10 @@ export function ChatArea() {
         postedAt: event.data.createdAt,
         createdAt: event.data.createdAt,
         updatedAt: event.data.createdAt,
-        deleted: false
+        deleted: false,
+        user: {
+          displayName: event.data.user.displayName
+        }
       };
 
       // Check if message exists using the ref instead of messages array
@@ -190,6 +211,44 @@ export function ChatArea() {
     }
   };
 
+  // Add this query for DM participants
+  const { data: dmParticipants } = useQuery({
+    queryKey: [`/api/v1/channels/${channelId}/participants`],
+    enabled: Boolean(channelId) && channel?.channelType === 'DM',
+    queryFn: async () => {
+      console.log('Fetching DM participants for:', {
+        channelId,
+        channelType: channel?.channelType,
+        isEnabled: Boolean(channelId) && channel?.channelType === 'DM'
+      });
+
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(`/api/v1/channels/${channelId}/members`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        console.error('Failed to fetch participants:', await response.text());
+        throw new Error('Failed to fetch DM participants');
+      }
+
+      const data = await response.json();
+      console.log('DM participants response:', data);
+      return data;
+    },
+    onSuccess: (data) => {
+      console.log('DM participants query succeeded:', {
+        participants: data,
+        filteredParticipants: data?.filter(p => p.userId !== user?.userId)
+      });
+    },
+    onError: (error) => {
+      console.error('DM participants query failed:', error);
+    }
+  });
+
   if (!channelId) {
     return (
       <div className="h-full flex items-center justify-center bg-background text-muted-foreground">
@@ -203,13 +262,39 @@ export function ChatArea() {
       {/* ChannelHeader */}
       <div className="flex-none h-14 min-h-[3.5rem] border-b px-4 flex items-center justify-between bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center space-x-2">
-          <h1 className="font-semibold"># {channel?.name || "Loading..."}</h1>
-          {channel?.description && (
-            <>
-              <Separator orientation="vertical" className="h-4" />
-              <span className="text-sm text-muted-foreground">
-                {channel.description}
+          {channel?.channelType === 'DM' ? (
+            // DM Header
+            <h1 className="font-semibold flex items-center gap-2">
+              <Avatar className="h-6 w-6">
+                <AvatarFallback>
+                  {dmParticipants
+                    ?.filter(p => p.userId !== user?.id)
+                    ?.map(p => p.displayName)
+                    .join(', ')?.[0]?.toUpperCase() || '?'}
+                </AvatarFallback>
+              </Avatar>
+              <span>
+                {dmParticipants
+                  ?.filter(p => p.userId !== user?.id)
+                  ?.map(p => p.displayName)
+                  .join(', ') || 'Direct Message'}
               </span>
+            </h1>
+          ) : (
+            // Regular Channel Header
+            <>
+              <h1 className="font-semibold flex items-center gap-2">
+                <Hash className="h-4 w-4" />
+                <span>{channel?.name || "Loading..."}</span>
+              </h1>
+              {channel?.description && (
+                <>
+                  <Separator orientation="vertical" className="h-4" />
+                  <span className="text-sm text-muted-foreground">
+                    {channel.description}
+                  </span>
+                </>
+              )}
             </>
           )}
         </div>
@@ -220,21 +305,11 @@ export function ChatArea() {
         <ScrollArea className="h-full px-4">
           <div className="py-4 space-y-4">
             {messages.map((msg) => (
-              <div key={msg.messageId} className="group flex items-start space-x-3 hover:bg-accent/5 rounded-lg p-2 -mx-2">
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  {/* Placeholder for user avatar */}
-                  <span className="text-xs font-medium">U</span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center space-x-2">
-                    <span className="font-medium">User {msg.userId}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(msg.postedAt).toLocaleTimeString()}
-                    </span>
-                  </div>
-                  <p className="text-sm mt-1 break-words">{msg.content}</p>
-                </div>
-              </div>
+              <MessageComponent 
+                key={msg.messageId} 
+                message={msg}
+                userName={msg.user?.displayName || `User ${msg.userId}`}
+              />
             ))}
             <div ref={messagesEndRef} />
           </div>

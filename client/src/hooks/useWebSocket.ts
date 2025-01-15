@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { WebSocketEvent } from '@/types/websocket';
+import { WebSocketEvent, WebSocketChannelEvent, WebSocketMessageEvent } from '@/types/websocket';
 
 interface WebSocketOptions {
   workspaceId: number;

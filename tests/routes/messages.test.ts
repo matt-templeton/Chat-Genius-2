@@ -170,7 +170,7 @@ describe('Message Endpoints', () => {
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
-      expect(response.body.details.code).toBe('INVALID_CONTENT');
+      expect(response.body.details.code).toBe('VALIDATION_ERROR');
     });
 
     it('should return 404 for non-existent channel', async () => {
@@ -479,7 +479,7 @@ describe('Message Endpoints', () => {
 
       expect(response.status).toBe(400);
       expect(response.body).toHaveProperty('error');
-      expect(response.body.details.code).toBe('INVALID_CONTENT');
+      expect(response.body.details.code).toBe('VALIDATION_ERROR');
     });
 
     it('should not allow updating a deleted message', async () => {

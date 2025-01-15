@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from "@db";
 import { channels, userChannels, userWorkspaces, workspaces, users } from "@db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
 import { z } from 'zod';
@@ -31,6 +31,13 @@ const createDmSchema = z.object({
   workspaceId: z.number().int().positive("Valid workspace ID is required"),
   participants: z.array(z.number().int().positive("Valid user IDs required"))
 });
+
+// Add this interface near the top of the file
+interface ChannelMember {
+  userId: number;
+  profilePicture: string | null;
+  displayName: string;
+}
 
 /**
  * @route POST /api/v1/channels/dm
@@ -551,6 +558,98 @@ router.delete('/:channelId/members', isAuthenticated, async (req: Request, res: 
       details: {
         code: "SERVER_ERROR",
         message: "Failed to remove member from channel"
+      }
+    });
+  }
+});
+
+/**
+ * @route GET /api/v1/channels/{channelId}/members
+ * @desc Get all members of a channel
+ */
+router.get('/:channelId/members', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { channelId } = req.params;
+    const currentUserId = req.user!.userId;
+
+    // Get the channel
+    const channel = await db.query.channels.findFirst({
+      where: eq(channels.channelId, parseInt(channelId))
+    });
+
+    if (!channel) {
+      return res.status(404).json({
+        error: "Channel Not Found",
+        details: {
+          code: "CHANNEL_NOT_FOUND",
+          message: "Channel not found"
+        }
+      });
+    }
+
+    // Verify workspace membership
+    const workspaceMembership = await db.query.userWorkspaces.findFirst({
+      where: and(
+        eq(userWorkspaces.userId, currentUserId),
+        eq(userWorkspaces.workspaceId, channel.workspaceId!)
+      )
+    });
+
+    if (!workspaceMembership) {
+      return res.status(403).json({
+        error: "Forbidden",
+        details: {
+          code: "NOT_WORKSPACE_MEMBER",
+          message: "You are not a member of this workspace"
+        }
+      });
+    }
+
+    // Get all channel members
+    const channelMembers = await db.query.userChannels.findMany({
+      where: eq(userChannels.channelId, parseInt(channelId))
+    });
+
+    // Verify the current user is a channel member
+    if (!channelMembers.some(member => member.userId === currentUserId)) {
+      return res.status(403).json({
+        error: "Forbidden",
+        details: {
+          code: "NOT_CHANNEL_MEMBER",
+          message: "You are not a member of this channel"
+        }
+      });
+    }
+
+    // Get user details for all channel members
+    const memberUserIds = channelMembers
+      .map(member => member.userId)
+      .filter((id): id is number => id !== null);
+
+    const memberUsers = await db.query.users.findMany({
+      where: inArray(users.userId, memberUserIds),
+      columns: {
+        userId: true,
+        profilePicture: true,
+        displayName: true
+      }
+    });
+
+    // Format the response
+    const channelMembersList: ChannelMember[] = memberUsers.map(user => ({
+      userId: user.userId,
+      profilePicture: user.profilePicture || null,
+      displayName: user.displayName
+    }));
+
+    res.json(channelMembersList);
+  } catch (error) {
+    console.error('Error fetching channel members:', error);
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: {
+        code: "SERVER_ERROR",
+        message: "Failed to fetch channel members"
       }
     });
   }

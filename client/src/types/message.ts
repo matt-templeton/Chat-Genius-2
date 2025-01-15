@@ -3,6 +3,12 @@
  * Defines the structure for messages and related entities
  */
 
+export interface MessageUser {
+  userId: number;
+  displayName: string;
+  profilePicture: string | null;
+}
+
 export interface Message {
   messageId: number;
   channelId: number;
@@ -16,6 +22,7 @@ export interface Message {
   updatedAt: string;
   reactions?: Reaction[];
   isPinned?: boolean;
+  user?: MessageUser | null;
 }
 
 export interface Reaction {

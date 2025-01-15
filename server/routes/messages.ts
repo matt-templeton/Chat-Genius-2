@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from "@db";
-import { messages, channels } from "@db/schema";
+import { messages, channels, users } from "@db/schema";
 import { eq, and, desc, lt } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
@@ -92,8 +92,17 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
         updatedAt: now
       })
       .returning();
-    console.log("Message created:", message);
     const wsManager = getWebSocketManager();
+
+    // Get the user's display name
+    const messageUser = await db.query.users.findFirst({
+      where: eq(users.userId, req.user!.userId),
+      columns: {
+        displayName: true
+      }
+    });
+
+    // Broadcast with user info
     wsManager.broadcastToWorkspace(channel.workspaceId, {
       type: "MESSAGE_CREATED",
       workspaceId: channel.workspaceId,
@@ -104,6 +113,9 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
         userId: message.userId,
         workspaceId: message.workspaceId,
         createdAt: message.createdAt.toISOString(),
+        user: {
+          displayName: messageUser?.displayName || `User ${message.userId}`
+        }
       }
     });
 
@@ -160,14 +172,40 @@ router.get('/:channelId/messages', isAuthenticated, async (req: Request, res: Re
       conditions.push(lt(messages.postedAt, new Date(before)));
     }
 
-    const messagesList = await db.query.messages.findMany({
-      where: and(...conditions),
-      orderBy: [desc(messages.postedAt)],
-      limit,
-      offset
+    // Modified query to only get displayName from users
+    const messagesList = await db
+      .select({
+        messageId: messages.messageId,
+        channelId: messages.channelId,
+        workspaceId: messages.workspaceId,
+        userId: messages.userId,
+        content: messages.content,
+        parentMessageId: messages.parentMessageId,
+        deleted: messages.deleted,
+        postedAt: messages.postedAt,
+        createdAt: messages.createdAt,
+        updatedAt: messages.updatedAt,
+        displayName: users.displayName,
+      })
+      .from(messages)
+      .leftJoin(users, eq(messages.userId, users.userId))
+      .where(and(...conditions))
+      .orderBy(desc(messages.postedAt))
+      .limit(limit)
+      .offset(offset);
+
+    // Transform the results to include displayName in user object
+    const formattedMessages = messagesList.map(message => {
+      const { displayName, ...messageFields } = message;
+      return {
+        ...messageFields,
+        user: {
+          displayName: displayName || `User ${message.userId}`
+        }
+      };
     });
 
-    res.json(messagesList);
+    res.json(formattedMessages);
   } catch (error) {
     console.error('Error fetching messages:', error);
     res.status(500).json({
