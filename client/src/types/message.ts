@@ -18,6 +18,7 @@ export interface Message {
   parentMessageId?: number;
   postedAt: string;
   deleted?: boolean;
+  hasAttachments?: boolean;
   createdAt: string;
   updatedAt: string;
   user?: MessageUser;

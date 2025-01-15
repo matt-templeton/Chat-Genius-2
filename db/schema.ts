@@ -109,6 +109,7 @@ export const messages = pgTable(
     parentMessageId: bigint("parentMessageId", { mode: "number" }),
     content: text("content").notNull(),
     deleted: boolean("deleted").default(false),
+    hasAttachments: boolean("hasAttachments").default(false),
     postedAt: timestamp("postedAt").defaultNow(),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     updatedAt: timestamp("updatedAt").notNull().defaultNow(),

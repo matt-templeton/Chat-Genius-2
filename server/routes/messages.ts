@@ -12,7 +12,8 @@ const router = Router();
 // Input validation schemas
 const createMessageSchema = z.object({
   content: z.string().min(1, "Message content cannot be empty"),
-  parentMessageId: z.number().int().positive().optional()
+  parentMessageId: z.number().int().positive().optional(),
+  hasAttachments: z.boolean().optional()
 });
 
 const updateMessageSchema = z.object({
@@ -86,6 +87,7 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
         userId: req.user!.userId,
         content,
         parentMessageId: parentMessageId || null,
+        hasAttachments: validationResult.data.hasAttachments || false,
         deleted: false,
         postedAt: now,
         createdAt: now,
@@ -114,6 +116,7 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
         userId: message.userId,
         workspaceId: message.workspaceId,
         parentMessageId: message.parentMessageId,
+        hasAttachments: message.hasAttachments,
         createdAt: message.createdAt.toISOString(),
         user: {
           userId: message.userId,

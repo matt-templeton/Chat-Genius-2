@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MoreHorizontal, SmileIcon, MessageSquare, Loader2 } from "lucide-react";
+import { MoreHorizontal, SmileIcon, MessageSquare, Loader2, Paperclip } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Message as MessageType } from "@/types/message";
@@ -77,6 +77,15 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
           "text-sm mt-1 break-words",
           isActiveUser && "text-right"
         )}>{message.content}</p>
+
+        {/* File Attachment Preview */}
+        {message.hasAttachments && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+            <Paperclip className="h-4 w-4" />
+            <span>Attachment</span>
+            {isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+          </div>
+        )}
 
         {/* RepliesPreview - Only show in main chat area, not in threads */}
         {hasReplies && !isInThread && (
