@@ -317,4 +317,45 @@ router.delete("/:fileId", isAuthenticated, async (req: Request, res: Response) =
   }
 });
 
+/**
+ * @route GET /files/message/:messageId
+ * @desc Get all files associated with a message
+ */
+router.get("/message/:messageId", isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { messageId } = req.params;
+
+    // Get all files for the message
+    const messageFiles = await db.query.files.findMany({
+      where: eq(files.messageId, parseInt(messageId)),
+    });
+
+    if (!messageFiles || messageFiles.length === 0) {
+      return res.status(404).json({
+        error: "Files Not Found",
+        details: {
+          code: "FILES_NOT_FOUND",
+          message: "No files found for this message"
+        }
+      });
+    }
+
+    // Verify workspace access for the first file (they should all be in the same workspace)
+    if (messageFiles[0].workspaceId && !(await verifyWorkspaceAccess(req, res, messageFiles[0].workspaceId))) {
+      return;
+    }
+
+    res.json(messageFiles);
+  } catch (error) {
+    console.error("Error fetching message files:", error);
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: {
+        code: "SERVER_ERROR",
+        message: "Failed to fetch message files"
+      }
+    });
+  }
+});
+
 export { router as fileRouter };

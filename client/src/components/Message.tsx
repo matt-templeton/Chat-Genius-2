@@ -1,10 +1,17 @@
-import { useState } from "react";
-import { MoreHorizontal, SmileIcon, MessageSquare, Loader2, Paperclip } from "lucide-react";
+import { useState, useEffect } from "react";
+import { MoreHorizontal, SmileIcon, MessageSquare, Loader2, Paperclip, FileIcon, ImageIcon } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Message as MessageType } from "@/types/message";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
+
+interface MessageFile {
+  fileId: number;
+  filename: string;
+  fileType: string;
+  fileUrl: string;
+}
 
 interface MessageProps {
   message: MessageType;
@@ -30,8 +37,19 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
     enabled: !message.parentMessageId && message.messageId > 0, // Only fetch for parent messages with positive IDs
   });
 
+  // Fetch files if message has attachments
+  const { data: files = [], isLoading: isLoadingFiles } = useQuery<MessageFile[]>({
+    queryKey: [`/api/v1/files/message/${message.messageId}`],
+    enabled: message.hasAttachments && message.messageId > 0,
+  });
+
   const hasReplies = message.parentMessageId || threadReplies.length > 0;
   const replyCount = threadReplies.length;
+
+  // Helper function to check if a file is an image
+  const isImageFile = (fileType: string) => {
+    return fileType.startsWith('image/');
+  };
 
   return (
     <div 
@@ -78,12 +96,46 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
           isActiveUser && "text-right"
         )}>{message.content}</p>
 
-        {/* File Attachment Preview */}
+        {/* File Attachments */}
         {message.hasAttachments && (
-          <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
-            <Paperclip className="h-4 w-4" />
-            <span>Attachment</span>
-            {isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+          <div className={cn(
+            "mt-2 space-y-2",
+            isActiveUser && "text-right"
+          )}>
+            {isLoadingFiles || isPending ? (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Paperclip className="h-4 w-4" />
+                <span>Loading attachments...</span>
+                <Loader2 className="h-3 w-3 animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {files.map((file) => (
+                  <div key={file.fileId} className="flex items-center gap-2">
+                    {isImageFile(file.fileType) ? (
+                      <div className="relative max-w-sm">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img 
+                          src={file.fileUrl} 
+                          alt={file.filename}
+                          className="rounded-md max-h-48 object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <a 
+                        href={file.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <FileIcon className="h-4 w-4" />
+                        <span>{file.filename}</span>
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
