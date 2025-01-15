@@ -1,28 +1,45 @@
 import { useState } from "react";
-import { MoreHorizontal, SmileIcon, MessageSquare } from "lucide-react";
+import { MoreHorizontal, SmileIcon, MessageSquare, Loader2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Message as MessageType } from "@/types/message";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 
 interface MessageProps {
   message: MessageType;
   userName?: string;
+  onReplyClick?: () => void;
+  isInThread?: boolean;
+  isActiveUser?: boolean;
 }
 
-export function Message({ message }: MessageProps) {
+export function Message({ message, onReplyClick, isInThread = false, isActiveUser = false }: MessageProps) {
   const [isHovered, setIsHovered] = useState(false);
 
   // Get first letter of username for avatar fallback
   const userInitial = message.user?.displayName?.[0]?.toUpperCase() || 'U';
   const displayName = message.user?.displayName || `User ${message.userId}`;
 
+  // Determine if message is pending (has negative ID)
+  const isPending = message.messageId < 0;
+
+  // Fetch thread replies count if this is a parent message and not an optimistic update
+  const { data: threadReplies = [] } = useQuery<MessageType[]>({
+    queryKey: [`/api/v1/messages/${message.messageId}/thread`],
+    enabled: !message.parentMessageId && message.messageId > 0, // Only fetch for parent messages with positive IDs
+  });
+
+  const hasReplies = message.parentMessageId || threadReplies.length > 0;
+  const replyCount = threadReplies.length;
+
   return (
     <div 
       className={cn(
         "group flex items-start space-x-3 rounded-lg p-2 -mx-2 relative",
         "transition-colors duration-200",
-        "hover:bg-accent/5"
+        "hover:bg-accent/5",
+        isActiveUser && "flex-row-reverse space-x-reverse"
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -46,20 +63,30 @@ export function Message({ message }: MessageProps) {
 
       {/* Message Content */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-center space-x-2">
+        <div className={cn(
+          "flex items-center space-x-2",
+          isActiveUser && "flex-row-reverse space-x-reverse"
+        )}>
           <span className="font-medium">{displayName}</span>
-          <span className="text-xs text-muted-foreground">
-            {new Date(message.postedAt).toLocaleTimeString()}
-          </span>
+          <div className="flex items-center space-x-1 text-xs text-muted-foreground">
+            <span>{new Date(message.postedAt).toLocaleTimeString()}</span>
+            {isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+          </div>
         </div>
-        <p className="text-sm mt-1 break-words">{message.content}</p>
+        <p className={cn(
+          "text-sm mt-1 break-words",
+          isActiveUser && "text-right"
+        )}>{message.content}</p>
 
-        {/* RepliesPreview - Only show if message has replies */}
-        {message.parentMessageId && (
-          <div className="mt-2 text-xs text-muted-foreground">
-            <Button variant="ghost" size="sm" className="h-6 px-2">
+        {/* RepliesPreview - Only show in main chat area, not in threads */}
+        {hasReplies && !isInThread && (
+          <div className={cn(
+            "mt-2 text-xs text-muted-foreground",
+            isActiveUser && "text-right"
+          )}>
+            <Button variant="ghost" size="sm" className="h-6 px-2" onClick={onReplyClick}>
               <MessageSquare className="h-3 w-3 mr-1" />
-              View replies
+              {message.parentMessageId ? "View replies" : `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`}
             </Button>
           </div>
         )}
@@ -68,7 +95,8 @@ export function Message({ message }: MessageProps) {
       {/* MessageInteractionsToolbar */}
       <div 
         className={cn(
-          "absolute right-2 top-2",
+          "absolute top-2",
+          isActiveUser ? "left-2" : "right-2",
           "flex items-center gap-1",
           "opacity-0 transition-opacity duration-200",
           isHovered ? "opacity-100" : "opacity-0"
@@ -81,13 +109,17 @@ export function Message({ message }: MessageProps) {
         >
           <SmileIcon className="h-4 w-4" />
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-        >
-          <MessageSquare className="h-4 w-4" />
-        </Button>
+        {/* Only show reply button if not in a thread */}
+        {!isInThread && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={onReplyClick}
+          >
+            <MessageSquare className="h-4 w-4" />
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="icon"

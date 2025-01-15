@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { db } from "@db";
-import { messages, channels, users } from "@db/schema";
+import { messages, channels, users, userWorkspaces, userChannels } from "@db/schema";
 import { eq, and, desc, lt } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
@@ -98,13 +98,14 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
     const messageUser = await db.query.users.findFirst({
       where: eq(users.userId, req.user!.userId),
       columns: {
-        displayName: true
+        displayName: true,
+        profilePicture: true
       }
     });
 
     // Broadcast with user info
     wsManager.broadcastToWorkspace(channel.workspaceId, {
-      type: "MESSAGE_CREATED",
+      type: "MESSAGE_CREATED" as const,
       workspaceId: channel.workspaceId,
       data: {
         messageId: message.messageId,
@@ -112,9 +113,12 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
         content: message.content,
         userId: message.userId,
         workspaceId: message.workspaceId,
+        parentMessageId: message.parentMessageId,
         createdAt: message.createdAt.toISOString(),
         user: {
-          displayName: messageUser?.displayName || `User ${message.userId}`
+          userId: message.userId,
+          displayName: messageUser?.displayName || `User ${message.userId}`,
+          profilePicture: messageUser?.profilePicture
         }
       }
     });
@@ -226,11 +230,27 @@ router.get('/:messageId', isAuthenticated, async (req: Request, res: Response) =
   try {
     const { messageId } = req.params;
 
-    const message = await db.query.messages.findFirst({
-      where: eq(messages.messageId, parseInt(messageId))
-    });
+    const message = await db
+      .select({
+        messageId: messages.messageId,
+        channelId: messages.channelId,
+        workspaceId: messages.workspaceId,
+        userId: messages.userId,
+        content: messages.content,
+        parentMessageId: messages.parentMessageId,
+        deleted: messages.deleted,
+        postedAt: messages.postedAt,
+        createdAt: messages.createdAt,
+        updatedAt: messages.updatedAt,
+        displayName: users.displayName,
+        profilePicture: users.profilePicture,
+      })
+      .from(messages)
+      .leftJoin(users, eq(messages.userId, users.userId))
+      .where(eq(messages.messageId, parseInt(messageId)))
+      .limit(1);
 
-    if (!message) {
+    if (!message || message.length === 0) {
       return res.status(404).json({
         error: "Message Not Found",
         details: {
@@ -240,7 +260,18 @@ router.get('/:messageId', isAuthenticated, async (req: Request, res: Response) =
       });
     }
 
-    res.json(message);
+    // Transform the result to include user info in a nested object
+    const { displayName, profilePicture, ...messageFields } = message[0];
+    const formattedMessage = {
+      ...messageFields,
+      user: {
+        userId: message[0].userId,
+        displayName: displayName || `User ${message[0].userId}`,
+        profilePicture
+      }
+    };
+
+    res.json(formattedMessage);
   } catch (error) {
     console.error('Error fetching message:', error);
     res.status(500).json({
@@ -388,6 +419,288 @@ router.delete('/:messageId', isAuthenticated, async (req: Request, res: Response
       details: {
         code: "SERVER_ERROR",
         message: "Failed to delete message"
+      }
+    });
+  }
+});
+
+/**
+ * @route GET /messages/:messageId/thread
+ * @desc Get all replies in a thread
+ */
+router.get('/:messageId/thread', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { messageId } = req.params;
+    const includeDeleted = req.query.includeDeleted === 'true';
+
+    // First get the parent message to verify it exists and get channel info
+    const parentMessage = await db.query.messages.findFirst({
+      where: eq(messages.messageId, parseInt(messageId))
+    });
+
+    if (!parentMessage || !parentMessage.channelId) {
+      return res.status(404).json({
+        error: "Message Not Found",
+        details: {
+          code: "MESSAGE_NOT_FOUND",
+          message: "Parent message not found"
+        }
+      });
+    }
+
+    // Get the channel to check permissions
+    const channel = await db.query.channels.findFirst({
+      where: eq(channels.channelId, parentMessage.channelId)
+    });
+
+    if (!channel || !channel.workspaceId) {
+      return res.status(404).json({
+        error: "Channel Not Found",
+        details: {
+          code: "CHANNEL_NOT_FOUND",
+          message: "Channel not found"
+        }
+      });
+    }
+
+    // Check if user is a member of the workspace
+    const workspaceMembership = await db.query.userWorkspaces.findFirst({
+      where: and(
+        eq(userWorkspaces.workspaceId, channel.workspaceId),
+        eq(userWorkspaces.userId, req.user!.userId)
+      )
+    });
+
+    if (!workspaceMembership) {
+      return res.status(404).json({
+        error: "Not Found",
+        details: {
+          code: "NOT_FOUND",
+          message: "Thread not found"
+        }
+      });
+    }
+
+    // If channel is not public, check channel membership
+    if (channel.channelType !== 'PUBLIC') {
+      const channelMembership = await db.query.userChannels.findFirst({
+        where: and(
+          eq(userChannels.channelId, channel.channelId),
+          eq(userChannels.userId, req.user!.userId)
+        )
+      });
+
+      if (!channelMembership) {
+        return res.status(404).json({
+          error: "Not Found",
+          details: {
+            code: "NOT_FOUND",
+            message: "Thread not found"
+          }
+        });
+      }
+    }
+
+    // Get all replies in the thread
+    let conditions = [
+      eq(messages.parentMessageId, parseInt(messageId)),
+      eq(messages.workspaceId, channel.workspaceId)
+    ];
+
+    if (!includeDeleted) {
+      conditions.push(eq(messages.deleted, false));
+    }
+
+    const threadMessages = await db
+      .select({
+        messageId: messages.messageId,
+        channelId: messages.channelId,
+        workspaceId: messages.workspaceId,
+        userId: messages.userId,
+        content: messages.content,
+        parentMessageId: messages.parentMessageId,
+        deleted: messages.deleted,
+        postedAt: messages.postedAt,
+        createdAt: messages.createdAt,
+        updatedAt: messages.updatedAt,
+        displayName: users.displayName,
+      })
+      .from(messages)
+      .leftJoin(users, eq(messages.userId, users.userId))
+      .where(and(...conditions))
+      .orderBy(desc(messages.postedAt));
+
+    // Transform the results to include displayName in user object
+    const formattedMessages = threadMessages.map(message => {
+      const { displayName, ...messageFields } = message;
+      return {
+        ...messageFields,
+        user: {
+          userId: message.userId,
+          displayName: displayName || `User ${message.userId}`
+        }
+      };
+    });
+
+    res.json(formattedMessages);
+  } catch (error) {
+    console.error('Error fetching thread messages:', error);
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: {
+        code: "SERVER_ERROR",
+        message: "Failed to fetch thread messages"
+      }
+    });
+  }
+});
+
+/**
+ * @route POST /messages/:messageId/thread
+ * @desc Post a reply in a thread
+ */
+router.post('/:messageId/thread', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { messageId } = req.params;
+    const validationResult = createMessageSchema.safeParse(req.body);
+
+    if (!validationResult.success) {
+      return res.status(400).json({
+        error: "Invalid Content",
+        details: {
+          code: "VALIDATION_ERROR",
+          message: "Invalid message data",
+          errors: validationResult.error.errors
+        }
+      });
+    }
+
+    const { content } = validationResult.data;
+
+    // Get the parent message to verify it exists and get channel info
+    const parentMessage = await db.query.messages.findFirst({
+      where: eq(messages.messageId, parseInt(messageId))
+    });
+
+    if (!parentMessage || !parentMessage.channelId) {
+      return res.status(404).json({
+        error: "Message Not Found",
+        details: {
+          code: "MESSAGE_NOT_FOUND",
+          message: "Parent message not found"
+        }
+      });
+    }
+
+    // Get the channel to check permissions
+    const channel = await db.query.channels.findFirst({
+      where: eq(channels.channelId, parentMessage.channelId)
+    });
+
+    if (!channel || !channel.workspaceId) {
+      return res.status(404).json({
+        error: "Channel Not Found",
+        details: {
+          code: "CHANNEL_NOT_FOUND",
+          message: "Channel not found"
+        }
+      });
+    }
+
+    // Check if user is a member of the workspace
+    const workspaceMembership = await db.query.userWorkspaces.findFirst({
+      where: and(
+        eq(userWorkspaces.workspaceId, channel.workspaceId),
+        eq(userWorkspaces.userId, req.user!.userId)
+      )
+    });
+
+    if (!workspaceMembership) {
+      return res.status(403).json({
+        error: "Forbidden",
+        details: {
+          code: "FORBIDDEN",
+          message: "You don't have permission to reply in this thread"
+        }
+      });
+    }
+
+    // If channel is not public, check channel membership
+    if (channel.channelType !== 'PUBLIC') {
+      const channelMembership = await db.query.userChannels.findFirst({
+        where: and(
+          eq(userChannels.channelId, channel.channelId),
+          eq(userChannels.userId, req.user!.userId)
+        )
+      });
+
+      if (!channelMembership) {
+        return res.status(403).json({
+          error: "Forbidden",
+          details: {
+            code: "FORBIDDEN",
+            message: "You don't have permission to reply in this thread"
+          }
+        });
+      }
+    }
+
+    const now = new Date();
+
+    // Insert the reply
+    const [message] = await db.insert(messages)
+      .values({
+        workspaceId: channel.workspaceId,
+        channelId: parentMessage.channelId,
+        userId: req.user!.userId,
+        content,
+        parentMessageId: parseInt(messageId),
+        deleted: false,
+        postedAt: now,
+        createdAt: now,
+        updatedAt: now
+      })
+      .returning();
+
+    const wsManager = getWebSocketManager();
+
+    // Get the user's display name
+    const messageUser = await db.query.users.findFirst({
+      where: eq(users.userId, req.user!.userId),
+      columns: {
+        displayName: true,
+        profilePicture: true
+      }
+    });
+
+    // Broadcast with user info
+    wsManager.broadcastToWorkspace(channel.workspaceId, {
+      type: "MESSAGE_CREATED" as const,
+      workspaceId: channel.workspaceId,
+      data: {
+        messageId: message.messageId,
+        channelId: message.channelId,
+        content: message.content,
+        userId: message.userId,
+        workspaceId: message.workspaceId,
+        parentMessageId: message.parentMessageId,
+        createdAt: message.createdAt.toISOString(),
+        user: {
+          userId: message.userId,
+          displayName: messageUser?.displayName || `User ${message.userId}`,
+          profilePicture: messageUser?.profilePicture
+        }
+      }
+    });
+
+    res.status(201).json(message);
+  } catch (error) {
+    console.error('Error creating thread reply:', error);
+    res.status(500).json({
+      error: "Internal Server Error",
+      details: {
+        code: "SERVER_ERROR",
+        message: "Failed to create thread reply"
       }
     });
   }

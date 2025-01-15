@@ -6,23 +6,21 @@
 export interface MessageUser {
   userId: number;
   displayName: string;
-  profilePicture: string | null;
+  profilePicture?: string | null;
 }
 
 export interface Message {
   messageId: number;
+  content: string;
+  userId: number;
   channelId: number;
   workspaceId: number;
-  userId: number;
-  content: string;
-  parentMessageId?: number | null;
-  deleted: boolean;
+  parentMessageId?: number;
   postedAt: string;
+  deleted?: boolean;
   createdAt: string;
   updatedAt: string;
-  reactions?: Reaction[];
-  isPinned?: boolean;
-  user?: MessageUser | null;
+  user?: MessageUser;
 }
 
 export interface Reaction {

@@ -3,8 +3,8 @@ import express from 'express';
 import bcrypt from 'bcrypt';
 import { registerRoutes } from '../../server/routes';
 import { db } from '@db';
-import { messages, users, channels, workspaces } from '@db/schema';
-import { eq, and } from 'drizzle-orm';
+import { messages, users, channels, workspaces, userWorkspaces, userChannels } from '@db/schema';
+import { eq, and, inArray } from 'drizzle-orm';
 
 const app = express();
 app.use(express.json());
@@ -64,6 +64,16 @@ describe('Message Endpoints', () => {
       expect(typeof parseInt(workspace.workspaceId.toString())).toBe('number');
       expect(workspace.name).toContain('Test Workspace');
       testWorkspace = workspace;
+
+      // Add user to workspace
+      await db.insert(userWorkspaces)
+        .values({
+          userId: parseInt(testUser.userId.toString()),
+          workspaceId: parseInt(workspace.workspaceId.toString()),
+          role: 'MEMBER',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
 
       // Create test channel
       const [channel] = await db.insert(channels)
@@ -600,14 +610,362 @@ describe('Message Endpoints', () => {
     });
   });
 
+  describe('GET /api/v1/messages/:messageId/thread', () => {
+    let parentMessage: any;
+    let otherUser: any;
+    let privateChannel: any;
+
+    beforeEach(async () => {
+      // Create parent message
+      const [message] = await db.insert(messages)
+        .values({
+          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
+          channelId: parseInt(testChannel.channelId.toString()),
+          userId: parseInt(testUser.userId.toString()),
+          content: 'Parent message for thread',
+          deleted: false,
+          postedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+      parentMessage = message;
+
+      // Create some thread replies
+      for (let i = 0; i < 3; i++) {
+        await db.insert(messages)
+          .values({
+            workspaceId: parseInt(testWorkspace.workspaceId.toString()),
+            channelId: parseInt(testChannel.channelId.toString()),
+            userId: parseInt(testUser.userId.toString()),
+            content: `Thread reply ${i + 1}`,
+            parentMessageId: parseInt(parentMessage.messageId.toString()),
+            deleted: false,
+            postedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date()
+          });
+      }
+
+      // Create another user for permission testing
+      const timestamp = new Date().getTime();
+      const passwordHash = await bcrypt.hash(testPassword, 10);
+      const [user] = await db.insert(users)
+        .values({
+          email: `other.user.${timestamp}@example.com`,
+          passwordHash,
+          displayName: 'Other Test User',
+          emailVerified: true,
+          deactivated: false,
+          lastKnownPresence: 'ONLINE',
+          lastLogin: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+      otherUser = user;
+
+      // Create a private channel
+      const [channel] = await db.insert(channels)
+        .values({
+          name: `private-channel-${timestamp}`,
+          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
+          topic: 'Private Test Channel',
+          channelType: 'PRIVATE',
+          archived: false,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+      privateChannel = channel;
+
+      // Add test user to private channel
+      await db.insert(userChannels)
+        .values({
+          userId: parseInt(testUser.userId.toString()),
+          channelId: parseInt(privateChannel.channelId.toString()),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+    });
+
+    it('should return thread replies for a message', async () => {
+      const response = await request
+        .get(`/api/v1/messages/${parentMessage.messageId}/thread`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBe(3);
+      expect(response.body[0]).toHaveProperty('parentMessageId', parseInt(parentMessage.messageId.toString()));
+    });
+
+    it('should return empty array when no replies exist', async () => {
+      // Create a message without replies
+      const [messageWithoutReplies] = await db.insert(messages)
+        .values({
+          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
+          channelId: parseInt(testChannel.channelId.toString()),
+          userId: parseInt(testUser.userId.toString()),
+          content: 'Message without replies',
+          deleted: false,
+          postedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      const response = await request
+        .get(`/api/v1/messages/${messageWithoutReplies.messageId}/thread`)
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
+      expect(response.body.length).toBe(0);
+    });
+
+    it('should return 404 for non-existent message', async () => {
+      const response = await request
+        .get('/api/v1/messages/99999/thread')
+        .set('Authorization', `Bearer ${accessToken}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body.details.code).toBe('MESSAGE_NOT_FOUND');
+    });
+
+    it('should return 404 when user is not in workspace', async () => {
+      // Login as other user who is not in workspace
+      const loginResponse = await request
+        .post('/api/v1/auth/login')
+        .send({
+          email: otherUser.email,
+          password: testPassword
+        });
+      const otherUserToken = loginResponse.body.accessToken;
+
+      const response = await request
+        .get(`/api/v1/messages/${parentMessage.messageId}/thread`)
+        .set('Authorization', `Bearer ${otherUserToken}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body.details.code).toBe('NOT_FOUND');
+    });
+
+    it('should return 404 for private channel when user is not a member', async () => {
+      // Create a message in private channel
+      const [privateMessage] = await db.insert(messages)
+        .values({
+          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
+          channelId: parseInt(privateChannel.channelId.toString()),
+          userId: parseInt(testUser.userId.toString()),
+          content: 'Private channel message',
+          deleted: false,
+          postedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      // Login as other user
+      const loginResponse = await request
+        .post('/api/v1/auth/login')
+        .send({
+          email: otherUser.email,
+          password: testPassword
+        });
+      const otherUserToken = loginResponse.body.accessToken;
+
+      const response = await request
+        .get(`/api/v1/messages/${privateMessage.messageId}/thread`)
+        .set('Authorization', `Bearer ${otherUserToken}`);
+
+      expect(response.status).toBe(404);
+      expect(response.body.details.code).toBe('NOT_FOUND');
+    });
+  });
+
+  describe('POST /api/v1/messages/:messageId/thread', () => {
+    let parentMessage: any;
+    let otherUser: any;
+    let privateChannel: any;
+
+    beforeEach(async () => {
+      // Create parent message
+      const [message] = await db.insert(messages)
+        .values({
+          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
+          channelId: parseInt(testChannel.channelId.toString()),
+          userId: parseInt(testUser.userId.toString()),
+          content: 'Parent message for thread',
+          deleted: false,
+          postedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+      parentMessage = message;
+
+      // Create another user for permission testing
+      const timestamp = new Date().getTime();
+      const passwordHash = await bcrypt.hash(testPassword, 10);
+      const [user] = await db.insert(users)
+        .values({
+          email: `other.user.${timestamp}@example.com`,
+          passwordHash,
+          displayName: 'Other Test User',
+          emailVerified: true,
+          deactivated: false,
+          lastKnownPresence: 'ONLINE',
+          lastLogin: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+      otherUser = user;
+
+      // Create a private channel
+      const [channel] = await db.insert(channels)
+        .values({
+          name: `private-channel-${timestamp}`,
+          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
+          topic: 'Private Test Channel',
+          channelType: 'PRIVATE',
+          archived: false,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+      privateChannel = channel;
+
+      // Add test user to private channel
+      await db.insert(userChannels)
+        .values({
+          userId: parseInt(testUser.userId.toString()),
+          channelId: parseInt(privateChannel.channelId.toString()),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+    });
+
+    it('should create a reply in the thread', async () => {
+      const response = await request
+        .post(`/api/v1/messages/${parentMessage.messageId}/thread`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          content: 'Thread reply content'
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty('messageId');
+      expect(response.body).toHaveProperty('content', 'Thread reply content');
+      expect(parseInt(response.body.parentMessageId.toString())).toBe(parseInt(parentMessage.messageId.toString()));
+      expect(parseInt(response.body.userId.toString())).toBe(parseInt(testUser.userId.toString()));
+    });
+
+    it('should return 404 for non-existent parent message', async () => {
+      const response = await request
+        .post('/api/v1/messages/99999/thread')
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          content: 'Thread reply content'
+        });
+
+      expect(response.status).toBe(404);
+      expect(response.body.details.code).toBe('MESSAGE_NOT_FOUND');
+    });
+
+    it('should return 403 when user is not in workspace', async () => {
+      // Login as other user who is not in workspace
+      const loginResponse = await request
+        .post('/api/v1/auth/login')
+        .send({
+          email: otherUser.email,
+          password: testPassword
+        });
+      const otherUserToken = loginResponse.body.accessToken;
+
+      const response = await request
+        .post(`/api/v1/messages/${parentMessage.messageId}/thread`)
+        .set('Authorization', `Bearer ${otherUserToken}`)
+        .send({
+          content: 'Thread reply content'
+        });
+
+      expect(response.status).toBe(403);
+      expect(response.body.details.code).toBe('FORBIDDEN');
+    });
+
+    it('should return 403 for private channel when user is not a member', async () => {
+      // Create a message in private channel
+      const [privateMessage] = await db.insert(messages)
+        .values({
+          workspaceId: parseInt(testWorkspace.workspaceId.toString()),
+          channelId: parseInt(privateChannel.channelId.toString()),
+          userId: parseInt(testUser.userId.toString()),
+          content: 'Private channel message',
+          deleted: false,
+          postedAt: new Date(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        })
+        .returning();
+
+      // Login as other user
+      const loginResponse = await request
+        .post('/api/v1/auth/login')
+        .send({
+          email: otherUser.email,
+          password: testPassword
+        });
+      const otherUserToken = loginResponse.body.accessToken;
+
+      const response = await request
+        .post(`/api/v1/messages/${privateMessage.messageId}/thread`)
+        .set('Authorization', `Bearer ${otherUserToken}`)
+        .send({
+          content: 'Thread reply content'
+        });
+
+      expect(response.status).toBe(403);
+      expect(response.body.details.code).toBe('FORBIDDEN');
+    });
+
+    it('should validate thread reply content', async () => {
+      const response = await request
+        .post(`/api/v1/messages/${parentMessage.messageId}/thread`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({
+          content: ''  // Empty content should be invalid
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.details.code).toBe('VALIDATION_ERROR');
+    });
+  });
+
   afterEach(async () => {
     try {
       if (testWorkspace?.workspaceId) {
+        // Get all channels in the workspace
+        const workspaceChannels = await db.select({ channelId: channels.channelId })
+          .from(channels)
+          .where(eq(channels.workspaceId, parseInt(testWorkspace.workspaceId.toString())));
+
         // Clean up test data in reverse order of creation
         await db.delete(messages)
           .where(eq(messages.workspaceId, parseInt(testWorkspace.workspaceId.toString())));
+        
+        // Delete all userChannels entries for all channels in the workspace
+        if (workspaceChannels.length > 0) {
+          const channelIds = workspaceChannels.map(c => c.channelId);
+          await db.delete(userChannels)
+            .where(inArray(userChannels.channelId, channelIds));
+        }
+
         await db.delete(channels)
           .where(eq(channels.workspaceId, parseInt(testWorkspace.workspaceId.toString())));
+        await db.delete(userWorkspaces)
+          .where(eq(userWorkspaces.workspaceId, parseInt(testWorkspace.workspaceId.toString())));
         await db.delete(workspaces)
           .where(eq(workspaces.workspaceId, parseInt(testWorkspace.workspaceId.toString())));
       }

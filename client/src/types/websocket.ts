@@ -23,6 +23,12 @@ export interface WebSocketMessageEvent {
     userId: number;
     workspaceId: number;
     createdAt: string;
+    parentMessageId?: number;
+    user: {
+      userId: number;
+      displayName: string;
+      profilePicture?: string | null;
+    };
   };
 }
 
