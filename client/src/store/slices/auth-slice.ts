@@ -1,8 +1,22 @@
-import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
+
+interface User {
+  userId: number;
+  email: string;
+  displayName: string;
+  defaultWorkspace: number;
+  profilePicture?: string;
+  statusMessage?: string;
+  lastKnownPresence?: string;
+  emailVerified: boolean;
+  lastLogin?: string;
+  deactivated: boolean;
+  theme: string;
+}
 
 interface AuthState {
   isAuthenticated: boolean;
-  user: any | null;
+  user: User | null;
   loading: boolean;
   error: string | null;
 }
@@ -60,7 +74,10 @@ export const checkAuth = createAsyncThunk(
       const data = await response.json();
       return data;
     } catch (error) {
-      return rejectWithValue(error.message);
+      if (error instanceof Error) {
+        return rejectWithValue(error.message);
+      }
+      return rejectWithValue('An unknown error occurred');
     }
   }
 );
@@ -74,6 +91,22 @@ const authSlice = createSlice({
       state.user = null;
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
+    },
+    updateUserStatus: (state, action: PayloadAction<string>) => {
+      if (state.user) {
+        state.user.statusMessage = action.payload;
+      }
+    },
+    updateUserProfile: (state, action: PayloadAction<User>) => {
+      if (state.user) {
+        state.user = {
+          ...state.user,
+          profilePicture: action.payload.profilePicture
+        };
+      }
+    },
+    updateUser: (state, action: PayloadAction<User>) => {
+      state.user = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -110,5 +143,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { logout } = authSlice.actions;
+export const { logout, updateUserStatus, updateUserProfile, updateUser } = authSlice.actions;
 export default authSlice.reducer;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { MoreHorizontal, SmileIcon, MessageSquare, Loader2, Paperclip, FileIcon, ImageIcon, X } from "lucide-react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Message as MessageType } from "@/types/message";
 import { cn } from "@/lib/utils";
@@ -104,17 +104,16 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
         {/* UserIcon with hover state */}
         <div className="relative">
           <Avatar className="w-8 h-8">
-            {message.user?.profilePicture && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img 
+            {message.user?.profilePicture ? (
+              <AvatarImage 
                 src={message.user.profilePicture} 
                 alt={displayName}
-                className="h-full w-full object-cover"
               />
+            ) : (
+              <AvatarFallback>
+                {userInitial}
+              </AvatarFallback>
             )}
-            <AvatarFallback>
-              {userInitial}
-            </AvatarFallback>
           </Avatar>
         </div>
 

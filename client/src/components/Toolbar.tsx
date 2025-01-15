@@ -14,6 +14,7 @@ export function Toolbar() {
   const dispatch = useAppDispatch();
   const [, setLocation] = useLocation();
   const { user } = useAppSelector((state) => state.auth);
+  const { currentWorkspace } = useAppSelector((state) => state.workspace);
 
   const handleLogout = () => {
     dispatch(logout());
@@ -23,7 +24,7 @@ export function Toolbar() {
   return (
     <div className="h-12 border-b px-4 flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <span className="font-semibold">Chat Genius</span>
+        <span className="font-semibold">{currentWorkspace?.name || 'Chat Genius'}</span>
         {user && (
           <>
             <Separator orientation="vertical" className="h-4" />

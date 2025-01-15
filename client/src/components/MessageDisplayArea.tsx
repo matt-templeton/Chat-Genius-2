@@ -30,7 +30,7 @@ export function MessageDisplayArea({ messages, onReplyClick, isInThread = false 
               userName={msg.user?.displayName || `User ${msg.userId}`}
               onReplyClick={onReplyClick ? () => onReplyClick(msg.messageId) : undefined}
               isInThread={isInThread}
-              isActiveUser={msg.userId === user?.id}
+              isActiveUser={msg.userId === user?.userId}
             />
           ))}
           <div ref={messagesEndRef} />

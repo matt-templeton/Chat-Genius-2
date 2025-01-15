@@ -205,6 +205,7 @@ router.get('/:channelId/messages', isAuthenticated, async (req: Request, res: Re
         createdAt: messages.createdAt,
         updatedAt: messages.updatedAt,
         displayName: users.displayName,
+        profilePicture: users.profilePicture,
       })
       .from(messages)
       .leftJoin(users, eq(messages.userId, users.userId))
@@ -215,11 +216,13 @@ router.get('/:channelId/messages', isAuthenticated, async (req: Request, res: Re
 
     // Transform the results to include displayName in user object
     const formattedMessages = messagesList.map(message => {
-      const { displayName, ...messageFields } = message;
+      const { displayName, profilePicture, ...messageFields } = message;
       return {
         ...messageFields,
         user: {
-          displayName: displayName || `User ${message.userId}`
+          userId: message.userId,
+          displayName: displayName || `User ${message.userId}`,
+          profilePicture: profilePicture || null
         }
       };
     });
@@ -541,6 +544,7 @@ router.get('/:messageId/thread', isAuthenticated, async (req: Request, res: Resp
         createdAt: messages.createdAt,
         updatedAt: messages.updatedAt,
         displayName: users.displayName,
+        profilePicture: users.profilePicture,
       })
       .from(messages)
       .leftJoin(users, eq(messages.userId, users.userId))
@@ -549,12 +553,13 @@ router.get('/:messageId/thread', isAuthenticated, async (req: Request, res: Resp
 
     // Transform the results to include displayName in user object
     const formattedMessages = threadMessages.map(message => {
-      const { displayName, ...messageFields } = message;
+      const { displayName, profilePicture, ...messageFields } = message;
       return {
         ...messageFields,
         user: {
           userId: message.userId,
-          displayName: displayName || `User ${message.userId}`
+          displayName: displayName || `User ${message.userId}`,
+          profilePicture: profilePicture || null
         }
       };
     });
