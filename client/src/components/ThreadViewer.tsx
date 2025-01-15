@@ -36,50 +36,30 @@ export function ThreadViewer({ messageId, workspaceId, channelId, onClose }: Thr
 
   // Handle WebSocket message events for thread replies
   const handleMessageEvent = useCallback((event: WebSocketMessageEvent) => {
-    console.log("ThreadViewer received message event:", {
-      type: event.type,
-      userId: event.data.userId,
-      currentUserId: user?.id,
-      identifier: event.data.identifier,
-      messageId: event.data.messageId,
-      parentMessageId: event.data.parentMessageId
-    });
-
-    if (
-      event.type === "MESSAGE_CREATED" && 
-      event.data.channelId === channelId &&
-      event.data.parentMessageId === messageId
-    ) {
+    // Only handle messages for this thread
+    if (event.data.parentMessageId === messageId) {
       // If this is our own message with an identifier, update the optimistic message
       if (event.data.userId === user?.id && event.data.identifier) {
-        console.log("Updating optimistic thread reply:", {
-          identifier: event.data.identifier,
-          newMessageId: event.data.messageId
-        });
-
         queryClient.setQueryData<Message[]>(
           [`/api/v1/messages/${messageId}/thread`],
-          (old = []) => {
-            const updated = old?.map(msg => 
-              msg.messageId === event.data.identifier 
-                ? {
-                    ...msg,
-                    messageId: event.data.messageId,
-                    createdAt: event.data.createdAt,
-                    updatedAt: event.data.createdAt,
-                    postedAt: event.data.createdAt
-                  }
-                : msg
-            ) || [];
-            console.log("Thread messages after update:", updated);
-            return updated;
-          }
+          (old = []) => old.map(msg => 
+            msg.messageId === event.data.identifier 
+              ? {
+                  ...msg,
+                  messageId: event.data.messageId,
+                  createdAt: event.data.createdAt,
+                  updatedAt: event.data.createdAt,
+                  postedAt: event.data.createdAt
+                }
+              : msg
+          )
         );
         return;
       }
 
       // For messages from other users, proceed with normal handling
       if (event.data.userId !== user?.id) {
+        // Create a new message object from the event data
         const newMessage: Message = {
           messageId: event.data.messageId,
           channelId: event.data.channelId,
@@ -91,6 +71,7 @@ export function ThreadViewer({ messageId, workspaceId, channelId, onClose }: Thr
           updatedAt: event.data.createdAt,
           deleted: false,
           parentMessageId: event.data.parentMessageId,
+          hasAttachments: event.data.hasAttachments,
           user: {
             userId: event.data.user.userId,
             displayName: event.data.user.displayName,
@@ -98,16 +79,11 @@ export function ThreadViewer({ messageId, workspaceId, channelId, onClose }: Thr
           }
         };
 
-        // Check if the message already exists in either threadReplies or realtimeReplies
-        const messageExists = threadReplies.some(msg => msg.messageId === newMessage.messageId) ||
-                            realtimeReplies.some(msg => msg.messageId === newMessage.messageId);
-
-        if (!messageExists) {
-          setRealtimeReplies(prev => [...prev, newMessage]);
-        }
+        // Add the new message to realtime replies
+        setRealtimeReplies(prev => [...prev, newMessage]);
       }
     }
-  }, [channelId, messageId, threadReplies, realtimeReplies, user?.id, queryClient]);
+  }, [messageId, user?.id, queryClient]);
 
   // Setup WebSocket connection
   useWebSocket({

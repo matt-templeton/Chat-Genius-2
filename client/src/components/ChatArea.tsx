@@ -167,6 +167,7 @@ export function ChatArea() {
           updatedAt: event.data.createdAt,
           deleted: false,
           parentMessageId: event.data.parentMessageId,
+          hasAttachments: event.data.hasAttachments,
           user: {
             userId: event.data.user.userId,
             displayName: event.data.user.displayName,

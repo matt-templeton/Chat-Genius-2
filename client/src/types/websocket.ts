@@ -24,6 +24,8 @@ export interface WebSocketMessageEvent {
     workspaceId: number;
     createdAt: string;
     parentMessageId?: number;
+    hasAttachments: boolean;
+    identifier?: number;
     user: {
       userId: number;
       displayName: string;

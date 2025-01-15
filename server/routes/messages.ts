@@ -41,6 +41,7 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
     }
 
     const { content, parentMessageId } = validationResult.data;
+    console.log("Message creation - hasAttachments from request:", validationResult.data.hasAttachments);
 
     // First get the channel to get its workspaceId
     const channel = await db.query.channels.findFirst({
@@ -78,6 +79,8 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
     }
 
     const now = new Date();
+    const hasAttachments = validationResult.data.hasAttachments || false;
+    console.log("Message creation - setting hasAttachments to:", hasAttachments);
 
     // Insert the message
     const [message] = await db.insert(messages)
@@ -87,13 +90,16 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
         userId: req.user!.userId,
         content,
         parentMessageId: parentMessageId || null,
-        hasAttachments: validationResult.data.hasAttachments || false,
+        hasAttachments,
         deleted: false,
         postedAt: now,
         createdAt: now,
         updatedAt: now
       })
       .returning();
+
+    console.log("Message creation - created message with hasAttachments:", message.hasAttachments);
+
     const wsManager = getWebSocketManager();
 
     // Get the user's display name
@@ -105,8 +111,8 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
       }
     });
 
-    // Broadcast with user info
-    wsManager.broadcastToWorkspace(channel.workspaceId, {
+    // Create the WebSocket event data
+    const wsEventData = {
       type: "MESSAGE_CREATED" as const,
       workspaceId: channel.workspaceId,
       data: {
@@ -124,7 +130,12 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
           profilePicture: messageUser?.profilePicture
         }
       }
-    });
+    };
+
+    console.log("Message creation - broadcasting WebSocket event with data:", wsEventData);
+
+    // Broadcast with user info
+    wsManager.broadcastToWorkspace(channel.workspaceId, wsEventData);
 
     res.status(201).json(message);
   } catch (error) {
@@ -690,6 +701,7 @@ router.post('/:messageId/thread', isAuthenticated, async (req: Request, res: Res
         userId: message.userId,
         workspaceId: message.workspaceId,
         parentMessageId: message.parentMessageId,
+        hasAttachments: message.hasAttachments,
         createdAt: message.createdAt.toISOString(),
         user: {
           userId: message.userId,
