@@ -9,6 +9,7 @@ import { useAppDispatch, useAppSelector } from "@/store";
 import { logout } from "@/store/slices/auth-slice";
 import { useLocation } from "wouter";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
 
 export function Toolbar() {
   const dispatch = useAppDispatch();
@@ -22,21 +23,30 @@ export function Toolbar() {
   };
 
   return (
-    <div className="h-12 border-b px-4 flex items-center justify-between">
+    <div className="h-12 px-4 flex items-center justify-between bg-toolbar text-white">
       <div className="flex items-center gap-2">
         <span className="font-semibold">{currentWorkspace?.name || 'Chat Genius'}</span>
         {user && (
           <>
-            <Separator orientation="vertical" className="h-4" />
-            <span className="text-sm text-muted-foreground">
+            <Separator orientation="vertical" className="h-4 bg-white/20" />
+            <span className="text-sm text-white/70">
               {user.displayName}
             </span>
           </>
         )}
       </div>
+
+      <div className="flex-1 max-w-md mx-4">
+        <Input
+          type="search"
+          placeholder={`Search ${currentWorkspace?.name || 'Chat Genius'}...`}
+          className="w-full h-8 bg-white/10 border-white/10 text-white placeholder:text-white/50"
+        />
+      </div>
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className="text-white hover:bg-white/10">
             Menu
           </Button>
         </DropdownMenuTrigger>

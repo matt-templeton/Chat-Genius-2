@@ -11,6 +11,9 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       colors: {
+        toolbar: "hsl(var(--toolbar-bg))",
+        sidebarBg: "hsl(var(--sidebar-bg))",
+        sidebarText: "hsl(var(--sidebar-text))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
         card: {

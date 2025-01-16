@@ -4,7 +4,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function ChatsSidebar() {
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="h-full bg-sidebarBg text-sidebarText">
       <div className="flex flex-col h-full">
         {/* Channels section */}
         <div>

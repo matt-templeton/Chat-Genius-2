@@ -5,7 +5,6 @@ import { Hash, Lock, ChevronRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useState, useEffect, useCallback } from "react";
-import { useWebSocket } from "@/hooks/useWebSocket";
 import { useLocation } from "wouter";
 import { ChannelCreateDialog } from "./ChannelCreateDialog";
 import {
@@ -75,12 +74,6 @@ export function ChannelList() {
     }
   }, [currentWorkspace, dispatch]);
 
-  // Setup WebSocket connection
-  useWebSocket({
-    workspaceId: currentWorkspace?.workspaceId || 0,
-    onChannelEvent: handleWebSocketEvent,
-  });
-
   // Fetch channels when workspace changes
   useEffect(() => {
     if (currentWorkspace?.workspaceId) {
@@ -128,6 +121,16 @@ export function ChannelList() {
     )
   );
 
+  // Add useEffect for listening to the custom event
+  useEffect(() => {
+    const handleChannel = (e: CustomEvent<WebSocketChannelEvent>) => {
+      handleWebSocketEvent(e.detail);
+    };
+
+    window.addEventListener('ws-channel', handleChannel as EventListener);
+    return () => window.removeEventListener('ws-channel', handleChannel as EventListener);
+  }, [handleWebSocketEvent]);
+
   if (!currentWorkspace) {
     return (
       <div className="px-3 py-2 text-sm text-muted-foreground">
@@ -158,9 +161,9 @@ export function ChannelList() {
             onClick={() => setIsExpanded(!isExpanded)}
           >
             {isExpanded ? (
-              <ChevronDown className="h-4 w-4" />
+              <ChevronDown className="h-4 w-4 text-sidebarText" />
             ) : (
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4 text-sidebarText" />
             )}
           </Button>
           <DropdownMenu>
@@ -168,7 +171,7 @@ export function ChannelList() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-auto p-0 font-semibold text-sm hover:bg-transparent"
+                className="h-auto p-0 font-semibold text-sm hover:bg-transparent text-sidebarText"
               >
                 Channels
               </Button>
@@ -198,9 +201,9 @@ export function ChannelList() {
             variant="ghost"
             size="sm"
             className={cn(
-              "w-full justify-start px-2 gap-2",
-              "hover:bg-accent hover:text-accent-foreground",
-              currentChannel?.channelId === channel.channelId && "bg-accent/50",
+              "w-full justify-start px-2 gap-2 text-sidebarText",
+              "hover:bg-white/10",
+              currentChannel?.channelId === channel.channelId && "bg-white/20"
             )}
             onClick={() => handleChannelSelect(channel.channelId)}
           >
@@ -214,7 +217,7 @@ export function ChannelList() {
         )
       ))}
       {isExpanded && (!activeChannels || activeChannels.length === 0) && (
-        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+        <div className="px-2 py-1.5 text-sm text-sidebarText">
           No channels found
         </div>
       )}

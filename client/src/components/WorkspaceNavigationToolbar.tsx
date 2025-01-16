@@ -123,7 +123,7 @@ export function WorkspaceNavigationToolbar() {
   };
 
   return (
-    <div className="w-16 border-r bg-sidebar flex flex-col items-center py-4 space-y-4">
+    <div className="w-16 flex flex-col items-center py-4 space-y-4 bg-toolbar text-white">
       <TooltipProvider delayDuration={300}>
         {/* WorkspaceIcon with Dropdown */}
         <Tooltip>
@@ -132,11 +132,11 @@ export function WorkspaceNavigationToolbar() {
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="p-0 h-auto hover:bg-transparent focus-visible:ring-offset-sidebar"
+                className="p-0 h-auto hover:bg-white/10 focus-visible:ring-offset-toolbar text-white"
               >
                 <Avatar className="h-10 w-10 cursor-pointer hover:opacity-80 transition-opacity">
                   <AvatarImage src="/workspace-icon.png" alt={currentWorkspace?.name || 'Workspace'} />
-                  <AvatarFallback className="bg-primary/10">
+                  <AvatarFallback className="bg-white/10">
                     {currentWorkspace?.name?.charAt(0) || 'W'}
                   </AvatarFallback>
                 </Avatar>
@@ -166,7 +166,7 @@ export function WorkspaceNavigationToolbar() {
               variant="ghost" 
               size="icon" 
               onClick={handleHomeClick}
-              className="rounded-lg hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors focus-visible:ring-offset-sidebar"
+              className="rounded-lg hover:bg-white/10 text-white transition-colors focus-visible:ring-offset-toolbar"
             >
               <Home className="h-5 w-5" />
             </Button>
@@ -176,7 +176,7 @@ export function WorkspaceNavigationToolbar() {
           </TooltipContent>
         </Tooltip>
 
-        <div className="flex-1 border-t border-sidebar-border my-2 w-8" />
+        <div className="flex-1 border-t border-white/20 my-2 w-8" />
 
         {/* CreateNewButton */}
         <Tooltip>
@@ -186,7 +186,7 @@ export function WorkspaceNavigationToolbar() {
               size="icon" 
               onClick={handleCreateNew}
               disabled={loading}
-              className="rounded-lg hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors focus-visible:ring-offset-sidebar"
+              className="rounded-lg hover:bg-white/10 text-white transition-colors focus-visible:ring-offset-toolbar"
             >
               <Plus className="h-5 w-5" />
             </Button>
@@ -203,14 +203,14 @@ export function WorkspaceNavigationToolbar() {
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="p-0 h-auto hover:bg-transparent focus-visible:ring-offset-sidebar"
+                className="p-0 h-auto hover:bg-white/10 text-white focus-visible:ring-offset-toolbar"
               >
                 <Avatar className="h-8 w-8 cursor-pointer hover:opacity-80 transition-opacity">
                   <AvatarImage 
                     src={user?.profilePicture || "/user-avatar.png"} 
                     alt={user?.displayName || 'User'} 
                   />
-                  <AvatarFallback>
+                  <AvatarFallback className="bg-white/10">
                     {user?.displayName?.charAt(0) || 'U'}
                   </AvatarFallback>
                 </Avatar>

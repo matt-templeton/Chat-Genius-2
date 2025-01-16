@@ -6,8 +6,6 @@ import { MessageDisplayArea } from "./MessageDisplayArea";
 import { MessageInput } from "./chat/MessageInput";
 import { Message } from "@/types/message";
 import { cn } from "@/lib/utils";
-import { useWebSocket } from "@/hooks/useWebSocket";
-import { WebSocketMessageEvent } from "@/types/websocket";
 import { useAppSelector } from "@/store";
 
 interface ThreadViewerProps {
@@ -95,10 +93,14 @@ export function ThreadViewer({ messageId, workspaceId, channelId, onClose }: Thr
   }, [messageId, user?.userId, queryClient]);
 
   // Setup WebSocket connection
-  useWebSocket({
-    workspaceId,
-    onMessageEvent: handleMessageEvent,
-  });
+  useEffect(() => {
+    const handleMessage = (e: CustomEvent<WebSocketMessageEvent>) => {
+      handleMessageEvent(e.detail);
+    };
+
+    window.addEventListener('ws-message', handleMessage as EventListener);
+    return () => window.removeEventListener('ws-message', handleMessage as EventListener);
+  }, [handleMessageEvent]);
 
   // Clear realtime replies when thread changes
   useEffect(() => {

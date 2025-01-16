@@ -175,9 +175,9 @@ export function DirectMessagesList() {
             onClick={() => setIsExpanded(!isExpanded)}
           >
             {isExpanded ? (
-              <ChevronDown className="h-4 w-4" />
+              <ChevronDown className="h-4 w-4 text-sidebarText" />
             ) : (
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4 text-sidebarText" />
             )}
           </Button>
 
@@ -187,7 +187,7 @@ export function DirectMessagesList() {
               <Button 
                 variant="ghost" 
                 size="sm"
-                className="h-auto p-0 font-semibold text-sm hover:bg-transparent"
+                className="h-auto p-0 font-semibold text-sm hover:bg-transparent text-sidebarText"
               >
                 Direct Messages
               </Button>
@@ -205,7 +205,7 @@ export function DirectMessagesList() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6 p-1"
+          className="h-6 w-6 p-1 text-sidebarText hover:bg-white/10"
           onClick={() => setCreateDialogOpen(true)}
         >
           <Plus className="h-4 w-4" />
@@ -228,9 +228,9 @@ export function DirectMessagesList() {
                 variant="ghost"
                 size="sm"
                 className={cn(
-                  "w-full justify-start px-2 gap-2",
-                  "hover:bg-accent hover:text-accent-foreground",
-                  currentChannel?.channelId === dm.channelId && "bg-accent/50"
+                  "w-full justify-start px-2 gap-2 text-sidebarText",
+                  "hover:bg-white/10",
+                  currentChannel?.channelId === dm.channelId && "bg-white/20"
                 )}
                 onClick={() => handleDmSelect(dm.channelId)}
               >
@@ -239,7 +239,7 @@ export function DirectMessagesList() {
                     src={dm.otherParticipants?.[0]?.profilePicture || "/user-avatar.png"}
                     alt={dm.otherParticipants?.[0]?.displayName || "User"}
                   />
-                  <AvatarFallback>
+                  <AvatarFallback className="bg-white/10">
                     {dm.otherParticipants?.[0]?.displayName?.[0]?.toUpperCase() || '?'}
                   </AvatarFallback>
                 </Avatar>
@@ -262,7 +262,7 @@ export function DirectMessagesList() {
       ))}
 
       {isExpanded && enrichedDms.length === 0 && (
-        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+        <div className="px-2 py-1.5 text-sm text-sidebarText">
           No direct messages yet
         </div>
       )}
