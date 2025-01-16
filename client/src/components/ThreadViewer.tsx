@@ -29,17 +29,26 @@ export function ThreadViewer({ messageId, workspaceId, channelId, onClose }: Thr
   });
 
   // Fetch thread replies
-  const { data: threadReplies = [] } = useQuery<Message[]>({
+  const { data: threadReplies = [], refetch: refetchReplies } = useQuery<Message[]>({
     queryKey: [`/api/v1/messages/${messageId}/thread`],
     enabled: Boolean(messageId),
+    refetchOnMount: true,
+    staleTime: 0, // Consider data stale immediately
   });
+
+  // Refetch thread replies when messageId changes
+  useEffect(() => {
+    if (messageId) {
+      refetchReplies();
+    }
+  }, [messageId, refetchReplies]);
 
   // Handle WebSocket message events for thread replies
   const handleMessageEvent = useCallback((event: WebSocketMessageEvent) => {
     // Only handle messages for this thread
     if (event.data.parentMessageId === messageId) {
       // If this is our own message with an identifier, update the optimistic message
-      if (event.data.userId === user?.id && event.data.identifier) {
+      if (event.data.userId === user?.userId && event.data.identifier) {
         queryClient.setQueryData<Message[]>(
           [`/api/v1/messages/${messageId}/thread`],
           (old = []) => old.map(msg => 
@@ -58,7 +67,7 @@ export function ThreadViewer({ messageId, workspaceId, channelId, onClose }: Thr
       }
 
       // For messages from other users, proceed with normal handling
-      if (event.data.userId !== user?.id) {
+      if (event.data.userId !== user?.userId) {
         // Create a new message object from the event data
         const newMessage: Message = {
           messageId: event.data.messageId,
@@ -83,7 +92,7 @@ export function ThreadViewer({ messageId, workspaceId, channelId, onClose }: Thr
         setRealtimeReplies(prev => [...prev, newMessage]);
       }
     }
-  }, [messageId, user?.id, queryClient]);
+  }, [messageId, user?.userId, queryClient]);
 
   // Setup WebSocket connection
   useWebSocket({

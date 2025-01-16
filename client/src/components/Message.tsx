@@ -1,10 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MoreHorizontal, SmileIcon, MessageSquare, Loader2, Paperclip, FileIcon, ImageIcon, X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Message as MessageType } from "@/types/message";
 import { cn } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import data from '@emoji-mart/data';
+import Picker from '@emoji-mart/react';
 
 interface MessageFile {
   fileId: number;
@@ -24,19 +27,8 @@ interface MessageProps {
 export function Message({ message, onReplyClick, isInThread = false, isActiveUser = false }: MessageProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [selectedImage, setSelectedImage] = useState<MessageFile | null>(null);
-
-  // Get first letter of username for avatar fallback
-  const userInitial = message.user?.displayName?.[0]?.toUpperCase() || 'U';
-  const displayName = message.user?.displayName || `User ${message.userId}`;
-
-  // Determine if message is pending (has negative ID)
-  const isPending = message.messageId < 0;
-
-  // Fetch thread replies count if this is a parent message and not an optimistic update
-  const { data: threadReplies = [] } = useQuery<MessageType[]>({
-    queryKey: [`/api/v1/messages/${message.messageId}/thread`],
-    enabled: !message.parentMessageId && message.messageId > 0, // Only fetch for parent messages with positive IDs
-  });
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const queryClient = useQueryClient();
 
   // Fetch files if message has attachments
   const { data: files = [], isLoading: isLoadingFiles } = useQuery<MessageFile[]>({
@@ -44,8 +36,9 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
     enabled: message.hasAttachments && message.messageId > 0,
   });
 
-  const hasReplies = message.parentMessageId || threadReplies.length > 0;
-  const replyCount = threadReplies.length;
+  // Get first letter of username for avatar fallback
+  const userInitial = message.user?.displayName?.[0]?.toUpperCase() || 'U';
+  const displayName = message.user?.displayName || `User ${message.userId}`;
 
   // Helper function to check if a file is an image
   const isImageFile = (fileType: string) => {
@@ -89,6 +82,92 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
     };
   }, [selectedImage]);
 
+  const handleEmojiSelect = async (emoji: any) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      // Make API call to add reaction
+      const response = await fetch(`/api/v1/messages/${message.messageId}/reactions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          emojiId: emoji.native
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        if (error.details?.code === 'DUPLICATE_REACTION') {
+          // If it's a duplicate, we'll just ignore it
+          return;
+        }
+        throw new Error(`Failed to add reaction: ${error.details?.message || 'Unknown error'}`);
+      }
+
+      // Update the messages query data to reflect the new reaction
+      queryClient.setQueryData<MessageType[]>(
+        [`/api/v1/channels/${message.channelId}/messages`],
+        (old = []) => old.map(msg => {
+          if (msg.messageId === message.messageId) {
+            return {
+              ...msg,
+              reactions: {
+                ...(msg.reactions || {}),
+                [emoji.native]: ((msg.reactions || {})[emoji.native] || 0) + 1
+              }
+            };
+          }
+          return msg;
+        })
+      );
+    } catch (error) {
+      console.error('Error adding reaction:', error);
+    }
+    setShowEmojiPicker(false);
+  };
+
+  const handleReactionClick = async (emojiId: string) => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      // Make API call to remove reaction
+      const response = await fetch(`/api/v1/messages/${message.messageId}/reactions/${encodeURIComponent(emojiId)}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        if (error.details?.code === 'REACTION_NOT_FOUND') {
+          return;
+        }
+        throw new Error(`Failed to remove reaction: ${error.details?.message || 'Unknown error'}`);
+      }
+
+      // Update the messages query data to reflect the removed reaction
+      queryClient.setQueryData<MessageType[]>(
+        [`/api/v1/channels/${message.channelId}/messages`],
+        (old = []) => old.map(msg => {
+          if (msg.messageId === message.messageId) {
+            const reactions = { ...(msg.reactions || {}) };
+            if (reactions[emojiId] > 1) {
+              reactions[emojiId]--;
+            } else {
+              delete reactions[emojiId];
+            }
+            return { ...msg, reactions };
+          }
+          return msg;
+        })
+      );
+    } catch (error) {
+      console.error('Error removing reaction:', error);
+    }
+  };
+
   return (
     <>
       <div 
@@ -128,16 +207,29 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
               "flex items-center gap-2",
               isActiveUser && "flex-row-reverse"
             )}>
-              {/* MessageInteractionsToolbar - Moved inside the header */}
+              {/* MessageInteractionsToolbar */}
               {isHovered && (
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                  >
-                    <SmileIcon className="h-4 w-4" />
-                  </Button>
+                  <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                      >
+                        <SmileIcon className="h-4 w-4" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Picker
+                        data={data}
+                        onEmojiSelect={handleEmojiSelect}
+                        theme="light"
+                        previewPosition="none"
+                        skinTonePosition="none"
+                      />
+                    </PopoverContent>
+                  </Popover>
                   {/* Only show reply button if not in a thread */}
                   {!isInThread && (
                     <Button
@@ -160,7 +252,7 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
               )}
               <div className="flex items-center space-x-1 text-xs text-muted-foreground">
                 <span>{new Date(message.postedAt).toLocaleTimeString()}</span>
-                {isPending && <Loader2 className="h-3 w-3 animate-spin" />}
+                {message.messageId < 0 && <Loader2 className="h-3 w-3 animate-spin" />}
               </div>
             </div>
           </div>
@@ -169,13 +261,32 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
             isActiveUser && "text-right"
           )}>{message.content}</p>
 
+          {/* Reactions Display */}
+          {message.reactions && Object.keys(message.reactions).length > 0 && (
+            <div className={cn(
+              "flex flex-wrap gap-1 mt-1",
+              isActiveUser && "justify-end"
+            )}>
+              {Object.entries(message.reactions).map(([emoji, count]) => (
+                <button
+                  key={emoji}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent/10 hover:bg-accent/20 transition-colors text-sm"
+                  onClick={() => handleReactionClick(emoji)}
+                >
+                  <span>{emoji}</span>
+                  <span className="text-xs text-muted-foreground">{count}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* File Attachments */}
           {message.hasAttachments && (
             <div className={cn(
               "mt-2 space-y-2",
               isActiveUser && "flex flex-col items-end"
             )}>
-              {isLoadingFiles || isPending ? (
+              {isLoadingFiles || message.messageId < 0 ? (
                 <div className={cn(
                   "flex items-center gap-2 text-sm text-muted-foreground",
                   isActiveUser && "flex-row-reverse"
@@ -222,14 +333,14 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
           )}
 
           {/* RepliesPreview - Only show in main chat area, not in threads */}
-          {hasReplies && !isInThread && (
+          {(message.replyCount ?? 0) > 0 && !isInThread && (
             <div className={cn(
               "mt-2 text-xs text-muted-foreground",
               isActiveUser && "text-right"
             )}>
               <Button variant="ghost" size="sm" className="h-6 px-2" onClick={onReplyClick}>
                 <MessageSquare className="h-3 w-3 mr-1" />
-                {message.parentMessageId ? "View replies" : `${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`}
+                {message.replyCount} {message.replyCount === 1 ? 'reply' : 'replies'}
               </Button>
             </div>
           )}
@@ -261,4 +372,4 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
       )}
     </>
   );
-} 
+}

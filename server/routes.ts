@@ -14,7 +14,6 @@ import {
   reactionRouter,
   fileRouter,
   pinRouter,
-  emojiRouter,
 } from "./routes/index";
 import express from "express";
 import { initializeWebSocketManager } from "./websocket/WebSocketManager";
@@ -44,7 +43,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       saveUninitialized: false,
       cookie: {
         secure: process.env.NODE_ENV === "production",
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        maxAge: 2 * 60 * 60 * 1000, // 2 hours
       },
     }),
   );
@@ -79,7 +78,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Standalone feature routes
   app.use(`${apiPrefix}/files`, fileRouter);
-  app.use(`${apiPrefix}/emojis`, emojiRouter);
 
   // Create HTTP server
   const httpServer = createServer(app);

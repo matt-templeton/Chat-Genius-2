@@ -22,6 +22,8 @@ export interface Message {
   createdAt: string;
   updatedAt: string;
   user?: MessageUser;
+  replyCount?: number;
+  reactions?: Record<string, number>;
 }
 
 export interface Reaction {

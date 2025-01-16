@@ -305,14 +305,16 @@ router.patch("/profile-picture", isAuthenticated, async (req: Request, res: Resp
     // Broadcast profile picture update to all workspaces
     const wsManager = getWebSocketManager();
     userWorkspacesList.forEach((workspace) => {
-      wsManager.broadcastToWorkspace(workspace.workspaceId, {
-        type: "USER_PROFILE_UPDATED",
-        workspaceId: workspace.workspaceId,
-        data: {
-          userId,
-          profilePicture,
-        },
-      });
+      if (workspace.workspaceId) {
+        wsManager.broadcastToWorkspace(workspace.workspaceId, {
+          type: "USER_PROFILE_UPDATED",
+          workspaceId: workspace.workspaceId,
+          data: {
+            userId,
+            profilePicture,
+          },
+        });
+      }
     });
 
     res.json(updatedUser);

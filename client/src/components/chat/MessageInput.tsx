@@ -112,7 +112,7 @@ export function MessageInput({ channelId, workspaceId, parentMessageId }: Messag
       const optimisticMessage: Message = {
         messageId: tempId,
         content: message,
-        userId: user!.id,
+        userId: user!.userId,
         channelId,
         workspaceId,
         parentMessageId,
@@ -120,8 +120,9 @@ export function MessageInput({ channelId, workspaceId, parentMessageId }: Messag
         postedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
+        replyCount: 0,
         user: {
-          userId: user!.id,
+          userId: user!.userId,
           displayName: user!.displayName,
           profilePicture: user!.profilePicture
         }
@@ -130,17 +131,20 @@ export function MessageInput({ channelId, workspaceId, parentMessageId }: Messag
       // Immediately update the UI with the new message
       if (parentMessageId) {
         // For thread replies
-        queryClient.setQueryData<Message[]>(
+        await queryClient.setQueryData<Message[]>(
           [`/api/v1/messages/${parentMessageId}/thread`],
           (old = []) => [...old, optimisticMessage]
         );
       } else {
         // For main chat messages
-        queryClient.setQueryData<Message[]>(
+        await queryClient.setQueryData<Message[]>(
           [`/api/v1/channels/${channelId}/messages`],
           (old = []) => [...old, optimisticMessage]
         );
       }
+
+      // Small delay to ensure React has processed the optimistic update
+      await new Promise(resolve => setTimeout(resolve, 0));
 
       // Send the message to the server
       const response = await fetch(`/api/v1/channels/${channelId}/messages`, {

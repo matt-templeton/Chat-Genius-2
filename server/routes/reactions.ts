@@ -1,16 +1,17 @@
 import { Router } from 'express';
 import { db } from "@db";
-import { messageReactions, messages, emojis } from "@db/schema";
-import { eq, and } from "drizzle-orm";
+import { messageReactions, messages } from "@db/schema";
+import { eq, and, sql } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
 import { z } from 'zod';
+import { getWebSocketManager } from '../websocket/WebSocketManager';
 
 const router = Router();
 
 // Input validation schema
 const addReactionSchema = z.object({
-  emojiId: z.number().int().positive("Valid emoji ID is required")
+  emojiId: z.string().min(1, "Emoji ID is required").max(50, "Emoji ID is too long")
 });
 
 /**
@@ -21,7 +22,7 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
   try {
     const { messageId } = req.params;
     const validationResult = addReactionSchema.safeParse(req.body);
-
+    
     if (!validationResult.success) {
       return res.status(400).json({
         error: "Invalid Request",
@@ -46,24 +47,6 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
         details: {
           code: "MESSAGE_NOT_FOUND",
           message: "Message not found"
-        }
-      });
-    }
-
-    // Verify emoji exists and is not deleted
-    const emoji = await db.query.emojis.findFirst({
-      where: and(
-        eq(emojis.emojiId, emojiId),
-        eq(emojis.deleted, false)
-      )
-    });
-
-    if (!emoji) {
-      return res.status(404).json({
-        error: "Emoji Not Found",
-        details: {
-          code: "EMOJI_NOT_FOUND",
-          message: "Emoji not found or has been deleted"
         }
       });
     }
@@ -97,6 +80,31 @@ router.post('/:messageId/reactions', isAuthenticated, async (req: Request, res: 
         userId: req.user!.userId
       })
       .returning();
+
+    // Get the updated reaction count for this emoji
+    const [{ count }] = await db
+      .select({
+        count: sql<number>`cast(count(*) as integer)`
+      })
+      .from(messageReactions)
+      .where(and(
+        eq(messageReactions.messageId, parseInt(messageId)),
+        eq(messageReactions.emojiId, emojiId)
+      ));
+
+    // Broadcast the reaction event
+    const wsManager = getWebSocketManager();
+    wsManager.broadcastToWorkspace(message.workspaceId, {
+      type: "REACTION_ADDED",
+      workspaceId: message.workspaceId,
+      data: {
+        messageId: parseInt(messageId),
+        channelId: message.channelId,
+        emojiId,
+        userId: req.user!.userId,
+        count
+      }
+    });
 
     res.status(201).json(reaction);
   } catch (error) {
@@ -149,7 +157,7 @@ router.delete('/:messageId/reactions/:emojiId', isAuthenticated, async (req: Req
     const existingReaction = await db.query.messageReactions.findFirst({
       where: and(
         eq(messageReactions.messageId, parseInt(messageId)),
-        eq(messageReactions.emojiId, parseInt(emojiId)),
+        eq(messageReactions.emojiId, emojiId),
         eq(messageReactions.userId, req.user!.userId)
       )
     });
@@ -169,9 +177,34 @@ router.delete('/:messageId/reactions/:emojiId', isAuthenticated, async (req: Req
       .where(and(
         eq(messageReactions.messageId, parseInt(messageId)),
         eq(messageReactions.workspaceId, message.workspaceId),
-        eq(messageReactions.emojiId, parseInt(emojiId)),
+        eq(messageReactions.emojiId, emojiId),
         eq(messageReactions.userId, req.user!.userId)
       ));
+
+    // Get the updated reaction count for this emoji
+    const [{ count }] = await db
+      .select({
+        count: sql<number>`cast(count(*) as integer)`
+      })
+      .from(messageReactions)
+      .where(and(
+        eq(messageReactions.messageId, parseInt(messageId)),
+        eq(messageReactions.emojiId, emojiId)
+      ));
+
+    // Broadcast the reaction event
+    const wsManager = getWebSocketManager();
+    wsManager.broadcastToWorkspace(message.workspaceId, {
+      type: "REACTION_REMOVED",
+      workspaceId: message.workspaceId,
+      data: {
+        messageId: parseInt(messageId),
+        channelId: message.channelId,
+        emojiId,
+        userId: req.user!.userId,
+        count
+      }
+    });
 
     res.status(204).send();
   } catch (error) {

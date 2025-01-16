@@ -34,4 +34,16 @@ export interface WebSocketMessageEvent {
   };
 }
 
-export type WebSocketEvent = WebSocketChannelEvent | WebSocketMessageEvent; 
+export interface WebSocketReactionEvent {
+  type: "REACTION_ADDED" | "REACTION_REMOVED";
+  workspaceId: number;
+  data: {
+    messageId: number;
+    channelId: number;
+    emojiId: string;
+    userId: number;
+    count: number;
+  };
+}
+
+export type WebSocketEvent = WebSocketChannelEvent | WebSocketMessageEvent | WebSocketReactionEvent; 

@@ -7,7 +7,6 @@ import { messageRouter } from './messages';
 import { reactionRouter } from './reactions';
 import { fileRouter } from './files';
 import { pinRouter } from './pins';
-import { emojiRouter } from './emojis';
 
 // Export individual routers
 export {
@@ -19,5 +18,4 @@ export {
   reactionRouter,
   fileRouter,
   pinRouter,
-  emojiRouter
 };

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from "@db";
 import { messages, channels, users, userWorkspaces, userChannels } from "@db/schema";
-import { eq, and, desc, lt } from "drizzle-orm";
+import { eq, and, desc, lt, sql, isNull } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
 import { z } from 'zod';
@@ -124,6 +124,7 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
         parentMessageId: message.parentMessageId,
         hasAttachments: message.hasAttachments,
         createdAt: message.createdAt.toISOString(),
+        replyCount: 0,
         user: {
           userId: message.userId,
           displayName: messageUser?.displayName || `User ${message.userId}`,
@@ -179,7 +180,8 @@ router.get('/:channelId/messages', isAuthenticated, async (req: Request, res: Re
 
     let conditions = [
       eq(messages.channelId, parseInt(channelId)),
-      eq(messages.workspaceId, channel.workspaceId!)
+      eq(messages.workspaceId, channel.workspaceId!),
+      isNull(messages.parentMessageId)
     ];
 
     if (!includeDeleted) {
@@ -190,7 +192,7 @@ router.get('/:channelId/messages', isAuthenticated, async (req: Request, res: Re
       conditions.push(lt(messages.postedAt, new Date(before)));
     }
 
-    // Modified query to only get displayName from users
+    // Modified query to include reply count and reactions
     const messagesList = await db
       .select({
         messageId: messages.messageId,
@@ -206,6 +208,24 @@ router.get('/:channelId/messages', isAuthenticated, async (req: Request, res: Re
         updatedAt: messages.updatedAt,
         displayName: users.displayName,
         profilePicture: users.profilePicture,
+        replyCount: sql<number>`(
+          SELECT COUNT(*)::integer 
+          FROM "Messages" as replies
+          WHERE replies."parentMessageId" = ${messages.messageId}
+          AND replies."deleted" = false
+        )`,
+        reactions: sql<Record<string, number>>`(
+          SELECT COALESCE(
+            jsonb_object_agg("emojiId", "count"),
+            '{}'::jsonb
+          )
+          FROM (
+            SELECT "emojiId", COUNT(*) as "count"
+            FROM "MessageReactions"
+            WHERE "MessageReactions"."messageId" = ${messages.messageId}
+            GROUP BY "emojiId"
+          ) as reaction_counts
+        )`
       })
       .from(messages)
       .leftJoin(users, eq(messages.userId, users.userId))
@@ -214,11 +234,12 @@ router.get('/:channelId/messages', isAuthenticated, async (req: Request, res: Re
       .limit(limit)
       .offset(offset);
 
-    // Transform the results to include displayName in user object
+    // Transform the results to include displayName in user object and parse reactions
     const formattedMessages = messagesList.map(message => {
-      const { displayName, profilePicture, ...messageFields } = message;
+      const { displayName, profilePicture, reactions, ...messageFields } = message;
       return {
         ...messageFields,
+        reactions: reactions || {},
         user: {
           userId: message.userId,
           displayName: displayName || `User ${message.userId}`,
@@ -226,7 +247,9 @@ router.get('/:channelId/messages', isAuthenticated, async (req: Request, res: Re
         }
       };
     });
-
+    
+    console.log("--------------------------------------------------------------------------------------------")
+    console.log(formattedMessages)
     res.json(formattedMessages);
   } catch (error) {
     console.error('Error fetching messages:', error);
@@ -263,6 +286,12 @@ router.get('/:messageId', isAuthenticated, async (req: Request, res: Response) =
         updatedAt: messages.updatedAt,
         displayName: users.displayName,
         profilePicture: users.profilePicture,
+        replyCount: sql<number>`(
+          SELECT COUNT(*)::integer 
+          FROM "Messages" 
+          WHERE "parentMessageId" = ${messages.messageId} 
+          AND "deleted" = false
+        )`,
       })
       .from(messages)
       .leftJoin(users, eq(messages.userId, users.userId))
@@ -708,6 +737,7 @@ router.post('/:messageId/thread', isAuthenticated, async (req: Request, res: Res
         parentMessageId: message.parentMessageId,
         hasAttachments: message.hasAttachments,
         createdAt: message.createdAt.toISOString(),
+        replyCount: 0,
         user: {
           userId: message.userId,
           displayName: messageUser?.displayName || `User ${message.userId}`,

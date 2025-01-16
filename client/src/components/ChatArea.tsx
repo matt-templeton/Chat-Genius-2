@@ -2,17 +2,16 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Hash } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
 import { Message, MessageUser } from "@/types/message";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MessageDisplayArea } from "./MessageDisplayArea";
 import { MessageInput } from "./chat/MessageInput";
 import { ThreadViewer } from "./ThreadViewer";
-import { WebSocketMessageEvent, WebSocketChannelEvent } from "@/types/websocket";
+import { WebSocketMessageEvent, WebSocketChannelEvent, WebSocketReactionEvent } from "@/types/websocket";
 
 interface Channel {
   channelId: number;
@@ -87,10 +86,11 @@ export function ChatArea() {
     console.log("ChatArea received message event:", {
       type: event.type,
       userId: event.data.userId,
-      currentUserId: user?.id,
+      currentUserId: user?.userId,
       identifier: event.data.identifier,
       messageId: event.data.messageId
     });
+    console.log("Workspace: ", workspaceId, "Channel: ", channelId )
     
     if (
       event.type === "MESSAGE_CREATED" && 
@@ -109,36 +109,8 @@ export function ChatArea() {
         return;
       }
 
-      // If this is our own message with an identifier, update the optimistic message
-      if (event.data.userId === user?.id && event.data.identifier) {
-        console.log("Updating optimistic message:", {
-          identifier: event.data.identifier,
-          newMessageId: event.data.messageId
-        });
-
-        queryClient.setQueryData<Message[]>(
-          [`/api/v1/channels/${channelId}/messages`],
-          (old = []) => {
-            const updated = old.map(msg => 
-              msg.messageId === event.data.identifier 
-                ? {
-                    ...msg,
-                    messageId: event.data.messageId,
-                    createdAt: event.data.createdAt,
-                    updatedAt: event.data.createdAt,
-                    postedAt: event.data.createdAt
-                  }
-                : msg
-            );
-            console.log("Messages after update:", updated);
-            return updated;
-          }
-        );
-        return;
-      }
-
       // For messages from other users, proceed with normal handling
-      if (event.data.userId !== user?.id) {
+      if (event.data.userId !== user?.userId) {
         console.log("Message event matches current channel:", {
           eventChannelId: event.data.channelId,
           currentChannelId: parseInt(channelId),
@@ -154,7 +126,7 @@ export function ChatArea() {
 
         // Add message ID to processed set
         processedMessageIds.current.add(event.data.messageId);
-        console.log("Added message ID to processed set:", event.data.messageId);
+        console.log("Added message ID to processed set:", event.data.messageId, "now there are ", processedMessageIds.current.size, "processed messages");
         
         const newMessage: Message = {
           messageId: event.data.messageId,
@@ -184,13 +156,62 @@ export function ChatArea() {
         }
       }
     }
-  }, [channelId, workspaceId, queryClient, threadMessageId, user?.id]);
+  }, [channelId, workspaceId, queryClient, threadMessageId, user?.userId]);
+
+  // Handle reaction events
+  const handleReactionEvent = useCallback((event: WebSocketReactionEvent) => {
+    if (event.data.channelId === parseInt(channelId)) {
+      queryClient.setQueryData<Message[]>(
+        [`/api/v1/channels/${channelId}/messages`],
+        (old = []) => old.map(msg => {
+          if (msg.messageId === event.data.messageId) {
+            const reactions = { ...(msg.reactions || {}) };
+            if (event.type === "REACTION_ADDED") {
+              reactions[event.data.emojiId] = event.data.count;
+            } else if (event.type === "REACTION_REMOVED") {
+              if (event.data.count > 0) {
+                reactions[event.data.emojiId] = event.data.count;
+              } else {
+                delete reactions[event.data.emojiId];
+              }
+            }
+            return { ...msg, reactions };
+          }
+          return msg;
+        })
+      );
+
+      // Also update thread messages if we're viewing a thread
+      if (threadMessageId) {
+        queryClient.setQueryData<Message[]>(
+          [`/api/v1/messages/${threadMessageId}/thread`],
+          (old = []) => old?.map(msg => {
+            if (msg.messageId === event.data.messageId) {
+              const reactions = { ...(msg.reactions || {}) };
+              if (event.type === "REACTION_ADDED") {
+                reactions[event.data.emojiId] = event.data.count;
+              } else if (event.type === "REACTION_REMOVED") {
+                if (event.data.count > 0) {
+                  reactions[event.data.emojiId] = event.data.count;
+                } else {
+                  delete reactions[event.data.emojiId];
+                }
+              }
+              return { ...msg, reactions };
+            }
+            return msg;
+          }) || []
+        );
+      }
+    }
+  }, [channelId, queryClient, threadMessageId]);
 
   // Setup WebSocket connection
   const { send } = useWebSocket({
     workspaceId: parseInt(workspaceId),
     onChannelEvent: handleChannelEvent,
     onMessageEvent: handleMessageEvent,
+    onReactionEvent: handleReactionEvent,
   });
 
   // Clear processed message IDs when channel changes
@@ -219,7 +240,7 @@ export function ChatArea() {
     }
   });
 
-  const otherParticipants = dmParticipants?.filter(p => p.userId !== user?.id) || [];
+  const otherParticipants = dmParticipants?.filter(p => p.userId !== user?.userId) || [];
   const otherParticipantsDisplayNames = otherParticipants.map(p => p.displayName).join(', ');
   const firstParticipantInitial = otherParticipantsDisplayNames[0]?.toUpperCase() || '?';
 
@@ -241,6 +262,10 @@ export function ChatArea() {
               // DM Header
               <h1 className="font-semibold flex items-center gap-2">
                 <Avatar className="h-6 w-6">
+                  <AvatarImage 
+                    src={otherParticipants[0]?.profilePicture || "/user-avatar.png"}
+                    alt={otherParticipants[0]?.displayName || "User"}
+                  />
                   <AvatarFallback>
                     {firstParticipantInitial}
                   </AvatarFallback>

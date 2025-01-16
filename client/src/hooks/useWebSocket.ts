@@ -1,17 +1,22 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { WebSocketEvent, WebSocketChannelEvent, WebSocketMessageEvent } from '@/types/websocket';
+import { WebSocketEvent, WebSocketChannelEvent, WebSocketMessageEvent, WebSocketReactionEvent } from '@/types/websocket';
+import { useAppSelector } from "@/store";
+import { useQueryClient } from "@tanstack/react-query";
+import { Message } from "@/types/message";
 
 interface WebSocketOptions {
   workspaceId: number;
   onChannelEvent?: (event: WebSocketChannelEvent) => void;
   onMessageEvent?: (event: WebSocketMessageEvent) => void;
+  onReactionEvent?: (event: WebSocketReactionEvent) => void;
 }
 
 export function useWebSocket({
   workspaceId,
   onChannelEvent,
   onMessageEvent,
+  onReactionEvent,
 }: WebSocketOptions) {
   const wsRef = useRef<WebSocket | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -20,6 +25,8 @@ export function useWebSocket({
   const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
   const { toast } = useToast();
   const [isConnected, setIsConnected] = useState(false);
+  const { user } = useAppSelector((state) => state.auth);
+  const queryClient = useQueryClient();
 
   // Memoize the connect function
   const connect = useCallback(() => {
@@ -42,7 +49,6 @@ export function useWebSocket({
       );
 
       ws.onopen = () => {
-        console.log("WebSocket connected to workspace:", workspaceId);
         setIsConnecting(false);
         setIsConnected(true);
         reconnectAttempts.current = 0;
@@ -56,6 +62,8 @@ export function useWebSocket({
             onChannelEvent(data as WebSocketChannelEvent);
           } else if (onMessageEvent && data.type === "MESSAGE_CREATED") {
             onMessageEvent(data as WebSocketMessageEvent);
+          } else if (onReactionEvent && ["REACTION_ADDED", "REACTION_REMOVED"].includes(data.type)) {
+            onReactionEvent(data as WebSocketReactionEvent);
           }
         } catch (error) {
           console.error("Error parsing WebSocket message:", error);
@@ -85,7 +93,7 @@ export function useWebSocket({
       setIsConnecting(false);
       console.error("WebSocket connection error:", error);
     }
-  }, [workspaceId, onChannelEvent, onMessageEvent]);
+  }, [workspaceId, onChannelEvent, onMessageEvent, onReactionEvent]);
 
   // Connect only when workspaceId changes
   useEffect(() => {

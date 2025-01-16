@@ -8,7 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Tooltip,
   TooltipContent,
@@ -20,7 +20,7 @@ import { fetchDirectMessages, handleDirectMessageCreated, setCurrentChannel } fr
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-
+import { Channel as ChannelType } from "@/types/channel";
 interface WebSocketChannelEvent {
   type: "CHANNEL_CREATED" | "CHANNEL_UPDATED" | "CHANNEL_ARCHIVED";
   workspaceId: number;
@@ -40,7 +40,7 @@ interface ChannelMember {
   displayName: string;
 }
 
-interface DmChannel extends Channel {
+interface DmChannel extends ChannelType {
   otherParticipants?: Array<{
     userId: number;
     displayName: string;
@@ -74,7 +74,8 @@ export function DirectMessagesList() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch channel members');
+        console.log(response)
+        throw new Error('Failed to fetch channel members, status: ' + response.status + " " + response.statusText);
       }
 
       const members: ChannelMember[] = await response.json();
@@ -92,19 +93,14 @@ export function DirectMessagesList() {
         console.log('No user found in DirectMessagesList:', user);
         return;
       }
-      console.log('Current user in DirectMessagesList:', user);
 
       const enrichedChannels = await Promise.all(
         dms.map(async (dm) => {
           const members = await fetchChannelMembers(dm.channelId);
           if (!members) return dm;
 
-          console.log('Channel members:', members);
-          console.log('Filtering out current user ID:', user.userId);
-          
           const otherParticipants = members.filter(member => {
             const isCurrentUser = member.userId === user.userId;
-            console.log(`Member ${member.displayName} (${member.userId}) is current user? ${isCurrentUser}`);
             return !isCurrentUser;
           });
 
@@ -137,11 +133,11 @@ export function DirectMessagesList() {
     }
   }, [currentWorkspace, dispatch]);
 
-  // Setup WebSocket connection
-  useWebSocket({
-    workspaceId: currentWorkspace?.workspaceId || 0,
-    onChannelEvent: handleWebSocketEvent,
-  });
+  // // Setup WebSocket connection
+  // useWebSocket({
+  //   workspaceId: currentWorkspace?.workspaceId || 0,
+  //   onChannelEvent: handleWebSocketEvent,
+  // });
 
   // Fetch DMs when workspace changes
   useEffect(() => {
@@ -239,21 +235,20 @@ export function DirectMessagesList() {
                 onClick={() => handleDmSelect(dm.channelId)}
               >
                 <Avatar className="h-6 w-6">
+                  <AvatarImage 
+                    src={dm.otherParticipants?.[0]?.profilePicture || "/user-avatar.png"}
+                    alt={dm.otherParticipants?.[0]?.displayName || "User"}
+                  />
                   <AvatarFallback>
                     {dm.otherParticipants?.[0]?.displayName?.[0]?.toUpperCase() || '?'}
                   </AvatarFallback>
                 </Avatar>
                 <span className="truncate">
                   {dm.otherParticipants
-                    ?.filter(p => p.userId !== user?.id)
+                    ?.filter(p => p.userId !== user?.userId)
                     ?.map(p => p.displayName)
                     .join(', ') || "Loading..."}
                 </span>
-                {dm.lastMessage && (
-                  <span className="ml-auto text-xs text-muted-foreground truncate">
-                    {dm.lastMessage}
-                  </span>
-                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right" align="center">

@@ -23,7 +23,11 @@ export function MessageDisplayArea({ messages, onReplyClick, isInThread = false 
     <div className="flex-1 overflow-hidden">
       <ScrollArea className="h-full px-4">
         <div className="py-4 space-y-4">
-          {messages.map((msg) => (
+          {messages
+            .filter((msg, index, self) => 
+              index === self.findIndex((m) => m.messageId === msg.messageId)
+            )
+            .map((msg) => (
             <MessageComponent 
               key={msg.messageId} 
               message={msg}

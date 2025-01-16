@@ -46,6 +46,7 @@ interface ChannelMember {
 router.post('/dm', isAuthenticated, async (req: Request, res: Response) => {
   try {
     const validationResult = createDmSchema.safeParse(req.body);
+    console.log(validationResult)
     if (!validationResult.success) {
       return res.status(400).json({
         error: "Bad Request",
@@ -62,7 +63,15 @@ router.post('/dm', isAuthenticated, async (req: Request, res: Response) => {
 
     // Add current user to participants if not included
     const allParticipants = Array.from(new Set([currentUserId, ...participants]));
-
+    if (allParticipants.length <= 1) {
+      return res.status(400).json({
+        error: "Bad Request",
+        details: {
+          code: "VALIDATION_ERROR",
+          message: "Couldn't find other member."
+        }
+      });
+    }
     // Verify workspace exists
     const workspace = await db.query.workspaces.findFirst({
       where: eq(workspaces.workspaceId, workspaceId)

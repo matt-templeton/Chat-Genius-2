@@ -161,23 +161,6 @@ export const files = pgTable(
   }),
 );
 
-// Emojis table
-export const emojis = pgTable(
-  "Emojis",
-  {
-    emojiId: bigserial("emojiId", { mode: "number" }).primaryKey(),
-    code: varchar("code", { length: 50 }).notNull().unique(),
-    deleted: boolean("deleted").default(false),
-    createdAt: timestamp("createdAt").notNull().defaultNow(),
-    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
-  },
-  (table) => ({
-    notDeletedIdx: index("idx_emojis_not_deleted")
-      .on(table.code)
-      .where(sql`${table.deleted} = false`),
-  }),
-);
-
 // Message Reactions table
 export const messageReactions = pgTable(
   "MessageReactions",
@@ -185,9 +168,7 @@ export const messageReactions = pgTable(
     reactionId: bigserial("reactionId", { mode: "number" }).primaryKey(),
     messageId: bigint("messageId", { mode: "number" }),
     workspaceId: bigint("workspaceId", { mode: "number" }),
-    emojiId: bigint("emojiId", { mode: "number" })
-      .references(() => emojis.emojiId, { onDelete: "set null" })
-      .notNull(),
+    emojiId: varchar("emojiId", { length: 50 }).notNull(),
     userId: bigint("userId", { mode: "number" }).references(
       () => users.userId,
       { onDelete: "set null" },
