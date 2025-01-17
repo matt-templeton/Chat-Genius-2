@@ -131,7 +131,8 @@ router.post("/register", async (req: Request, res: Response) => {
         updatedAt: new Date(),
       })
       .returning();
-    // Create userWorkspace record with OWNER role
+
+    // Create userWorkspace record with OWNER role for their personal workspace
     await db.insert(userWorkspaces).values({
       userId: user.userId,
       workspaceId: workspace.workspaceId,
@@ -139,6 +140,22 @@ router.post("/register", async (req: Request, res: Response) => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+
+    // Find the global workspace
+    const globalWorkspace = await db.query.workspaces.findFirst({
+      where: eq(workspaces.name, 'global')
+    });
+
+    if (globalWorkspace) {
+      // Add user to global workspace as a member
+      await db.insert(userWorkspaces).values({
+        userId: user.userId,
+        workspaceId: globalWorkspace.workspaceId,
+        role: "MEMBER",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
 
     // Auto-verify for testing
     await db

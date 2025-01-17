@@ -110,6 +110,36 @@ async function createTestWorkspace() {
   return testWorkspace;
 }
 
+async function createGlobalWorkspace() {
+  console.log('Creating global workspace...');
+  // Create global workspace
+  const [globalWorkspace] = await db.insert(workspaces).values({
+    name: 'global',
+    description: 'Global workspace for all users',
+  })
+  .returning();
+
+  // Create general channel
+  await db.insert(channels).values({
+    workspaceId: globalWorkspace.workspaceId,
+    name: 'general',
+    topic: 'General discussions',
+    channelType: 'PUBLIC',
+  });
+
+  // Add all users to the global workspace
+  const allUsers = await db.select().from(users);
+  for (const user of allUsers) {
+    await db.insert(userWorkspaces).values({
+      userId: user.userId,
+      workspaceId: globalWorkspace.workspaceId,
+      role: 'MEMBER',
+    }).onConflictDoNothing();
+  }
+
+  return globalWorkspace;
+}
+
 async function seedDatabase() {
   try {
     // Step 1: Create users from users.json
@@ -127,6 +157,9 @@ async function seedDatabase() {
 
     // Step 3: Create test workspace and add all users
     await createTestWorkspace();
+
+    // Step 4: Create global workspace and add all users
+    await createGlobalWorkspace();
 
   } catch (error) {
     console.error('Error seeding database:', error);

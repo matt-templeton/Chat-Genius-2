@@ -460,8 +460,6 @@ async function handleUserMention(message: Message, mentionedUser: { userId: numb
         name: msg.displayName || `User ${msg.userId}`
       });
     });
-    console.log("CHAT HISTORY")
-    console.log(chat_history)
     const response = await ragChain.invoke({
       chat_history,
       input: query,
