@@ -1,0 +1,12 @@
+{
+  "toolbar": {
+    "background": "#63A088",
+    "text": "#53DD6C"
+  },
+  "sidebar": {
+    "background": "#EAF8BF",
+    "text": "#001011",
+    "hoverBackground": "rgba(255, 255, 255, 0.1)",
+    "activeBackground": "rgba(255, 255, 255, 0.2)"
+  }
+}

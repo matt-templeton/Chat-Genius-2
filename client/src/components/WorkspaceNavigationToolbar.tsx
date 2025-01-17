@@ -125,7 +125,7 @@ export function WorkspaceNavigationToolbar() {
   };
 
   return (
-    <div className="w-16 flex flex-col items-center py-4 space-y-4 bg-toolbar text-white">
+    <div className="w-16 flex flex-col items-center py-4 space-y-4 bg-toolbar text-toolbar-text">
       <TooltipProvider delayDuration={300}>
         {/* WorkspaceIcon with Dropdown */}
         <Tooltip>
@@ -134,7 +134,7 @@ export function WorkspaceNavigationToolbar() {
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="p-0 h-auto hover:bg-white/10 focus-visible:ring-offset-toolbar text-white"
+                className="p-0 h-auto hover:bg-white/10 focus-visible:ring-offset-toolbar text-toolbar-text"
               >
                 <Avatar className="h-10 w-10 cursor-pointer hover:opacity-80 transition-opacity">
                   <AvatarImage src="/workspace-icon.png" alt={currentWorkspace?.name || 'Workspace'} />
@@ -168,7 +168,7 @@ export function WorkspaceNavigationToolbar() {
               variant="ghost" 
               size="icon" 
               onClick={handleHomeClick}
-              className="rounded-lg hover:bg-white/10 text-white transition-colors focus-visible:ring-offset-toolbar"
+              className="rounded-lg hover:bg-white/10 text-toolbar-text transition-colors focus-visible:ring-offset-toolbar"
             >
               <Home className="h-5 w-5" />
             </Button>
@@ -188,7 +188,7 @@ export function WorkspaceNavigationToolbar() {
               size="icon" 
               onClick={handleCreateNew}
               disabled={loading}
-              className="rounded-lg hover:bg-white/10 text-white transition-colors focus-visible:ring-offset-toolbar"
+              className="rounded-lg hover:bg-white/10 text-toolbar-text transition-colors focus-visible:ring-offset-toolbar"
             >
               <Plus className="h-5 w-5" />
             </Button>
@@ -205,7 +205,7 @@ export function WorkspaceNavigationToolbar() {
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="p-0 h-auto hover:bg-white/10 text-white focus-visible:ring-offset-toolbar"
+                className="p-0 h-auto hover:bg-white/10 text-toolbar-text focus-visible:ring-offset-toolbar"
               >
                 <Avatar className="h-8 w-8 cursor-pointer hover:opacity-80 transition-opacity">
                   <AvatarImage 

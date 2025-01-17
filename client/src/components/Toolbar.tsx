@@ -23,13 +23,13 @@ export function Toolbar() {
   };
 
   return (
-    <div className="h-12 px-4 flex items-center justify-between bg-toolbar text-white">
+    <div className="h-12 px-4 flex items-center justify-between bg-toolbar text-toolbar-text">
       <div className="flex items-center gap-2">
         <span className="font-semibold">{currentWorkspace?.name || 'Chat Genius'}</span>
         {user && (
           <>
             <Separator orientation="vertical" className="h-4 bg-white/20" />
-            <span className="text-sm text-white/70">
+            <span className="text-sm text-toolbar-text/70">
               {user.displayName}
             </span>
           </>
@@ -40,13 +40,13 @@ export function Toolbar() {
         <Input
           type="search"
           placeholder={`Search ${currentWorkspace?.name || 'Chat Genius'}...`}
-          className="w-full h-8 bg-white/10 border-white/10 text-white placeholder:text-white/50"
+          className="w-full h-8 bg-white/10 border-white/10 text-toolbar-text placeholder:text-toolbar-text/50"
         />
       </div>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="text-white hover:bg-white/10">
+          <Button variant="ghost" size="sm" className="text-toolbar-text hover:bg-white/10">
             Menu
           </Button>
         </DropdownMenuTrigger>

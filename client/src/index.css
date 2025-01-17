@@ -4,10 +4,11 @@
 
 @layer base {
   :root {
-    /* Base colors - blue theme */
-    --toolbar-bg: 213 85% 30%;  /* #0B4C8B */
-    --sidebar-bg: 217 19% 61%;  /* #8898AD */
-    --sidebar-text: 0 0% 100%;  /* #FFFFFF */
+    /* Theme colors - managed by themeUtils.ts */
+    --toolbar-bg: 213 85% 30%;  /* Default, will be overridden */
+    --toolbar-text: 0 0% 100%;  /* Default, will be overridden */
+    --sidebar-bg: 217 19% 61%;  /* Default, will be overridden */
+    --sidebar-text: 0 0% 100%;  /* Default, will be overridden */
     
     /* Existing theme variables */
     --background: 0 0% 100%;
