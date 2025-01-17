@@ -7,7 +7,7 @@ import * as bcrypt from 'bcrypt';
 
 // Import seed data
 import usersSeedData from './users.json';
-import socratesQuotes from '../../client/src/ai/phil/socrates.json';
+import socratesQuotes from '../../server/ai/phil/soc.json';
 
 async function seedPhilosophy() {
   try {

@@ -6,8 +6,21 @@ import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
 import { z } from 'zod';
 import { getWebSocketManager } from '../websocket/WebSocketManager';
+import { Pinecone } from "@pinecone-database/pinecone";
+import { OpenAIEmbeddings } from "@langchain/openai";
 
 const router = Router();
+
+// Initialize OpenAI embeddings
+const embeddings = new OpenAIEmbeddings({
+  modelName: "text-embedding-3-large",
+  dimensions: 3072,
+});
+
+// Initialize Pinecone client
+const pinecone = new Pinecone({
+  apiKey: process.env.PINECONE_API_KEY!,
+});
 
 // Input validation schemas
 const createMessageSchema = z.object({
@@ -41,8 +54,6 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
     }
 
     const { content, parentMessageId } = validationResult.data;
-    console.log("Message creation - hasAttachments from request:", validationResult.data.hasAttachments);
-
     // First get the channel to get its workspaceId
     const channel = await db.query.channels.findFirst({
       where: eq(channels.channelId, parseInt(channelId))
@@ -80,8 +91,6 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
 
     const now = new Date();
     const hasAttachments = validationResult.data.hasAttachments || false;
-    console.log("Message creation - setting hasAttachments to:", hasAttachments);
-
     // Insert the message
     const [message] = await db.insert(messages)
       .values({
@@ -98,7 +107,6 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
       })
       .returning();
 
-    console.log("Message creation - created message with hasAttachments:", message.hasAttachments);
 
     const wsManager = getWebSocketManager();
 
@@ -133,12 +141,84 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
       }
     };
 
-    console.log("Message creation - broadcasting WebSocket event with data:", wsEventData);
-
     // Broadcast with user info
     wsManager.broadcastToWorkspace(channel.workspaceId, wsEventData);
 
+    // Handle mentions after the message is created and broadcast
+    const mentionRegex = /@(\S+)/g;  // Match @ followed by non-whitespace characters
+    const mentions = content.match(mentionRegex);
+
+    if (mentions) {
+      // await aiService.initialize();
+
+      // Process each mention
+      for (const mention of mentions) {
+        const displayName = mention.substring(1); // Remove the @ symbol
+
+        // Find user in the workspace by display name
+        const mentionedUser = await db
+          .select({
+            userId: users.userId,
+            displayName: users.displayName,
+            profilePicture: users.profilePicture
+          })
+          .from(users)
+          .innerJoin(
+            userWorkspaces,
+            and(
+              eq(userWorkspaces.userId, users.userId),
+              eq(userWorkspaces.workspaceId, channel.workspaceId)
+            )
+          )
+          .where(eq(users.displayName, displayName))
+          .limit(1);
+
+        if (mentionedUser.length > 0) {
+          const user = mentionedUser[0];
+          console.log("Found mentioned user:", user);
+
+          
+        } else {
+          console.log(`No user found with display name: ${displayName} in workspace ${channel.workspaceId}`);
+        }
+      }
+    }
+
     res.status(201).json(message);
+
+    // Add message to Pinecone index
+    try {
+      // Generate embedding for the message
+      const [embedding] = await embeddings.embedDocuments([message.content]);
+      
+      // Get Pinecone index
+      const index = pinecone.index('slackers');
+      
+      // Prepare metadata
+      const metadata: Record<string, string | number> = {
+        timestamp: Math.floor(message.createdAt.getTime() / 1000),
+        messageId: message.messageId.toString(),
+        workspaceId: message.workspaceId.toString()
+      };
+      
+      if (message.userId) {
+        metadata.userId = message.userId.toString();
+      }
+      
+      if (message.channelId) {
+        metadata.channelId = message.channelId.toString();
+      }
+
+      // Upsert the vector to the workspace's namespace
+      await index.namespace(message.workspaceId.toString()).upsert([{
+        id: `msg_${message.messageId}`,
+        values: embedding,
+        metadata
+      }]);
+    } catch (error) {
+      // Log error but don't fail the request since the message was already saved
+      console.error('Error adding message to Pinecone index:', error);
+    }
   } catch (error) {
     console.error('Error creating message:', error);
     res.status(500).json({
@@ -248,8 +328,6 @@ router.get('/:channelId/messages', isAuthenticated, async (req: Request, res: Re
       };
     });
     
-    console.log("--------------------------------------------------------------------------------------------")
-    console.log(formattedMessages)
     res.json(formattedMessages);
   } catch (error) {
     console.error('Error fetching messages:', error);
@@ -403,6 +481,9 @@ router.put('/:messageId', isAuthenticated, async (req: Request, res: Response) =
       .returning();
 
     res.json(message);
+
+    
+
   } catch (error) {
     console.error('Error updating message:', error);
     res.status(500).json({
@@ -458,6 +539,15 @@ router.delete('/:messageId', isAuthenticated, async (req: Request, res: Response
         eq(messages.messageId, parseInt(messageId)),
         eq(messages.workspaceId, existingMessage.workspaceId)
       ));
+
+    // Remove message from Pinecone index
+    try {
+      const index = pinecone.index('slackers');
+      await index.namespace(existingMessage.workspaceId.toString()).deleteOne(`msg_${messageId}`);
+    } catch (error) {
+      // Log error but don't fail the request since the message was already deleted from DB
+      console.error('Error removing message from Pinecone index:', error);
+    }
 
     res.status(204).send();
   } catch (error) {

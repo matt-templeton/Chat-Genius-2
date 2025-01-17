@@ -172,7 +172,7 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
     <>
       <div 
         className={cn(
-          "group flex items-start space-x-3 rounded-lg p-2 -mx-2 relative",
+          "group flex items-start space-x-3 rounded-lg p-1.5 -mx-2 relative",
           "transition-colors duration-200",
           "hover:bg-accent/5",
           isActiveUser && "flex-row-reverse space-x-reverse"

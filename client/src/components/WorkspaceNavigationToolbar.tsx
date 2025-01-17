@@ -1,4 +1,4 @@
-import { Plus, Home, Settings, LogOut, Check, User } from "lucide-react";
+import { Plus, Home, Settings, LogOut, Check, User, Bot } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -23,6 +23,7 @@ import {
 import { PreferencesOverlay } from "./PreferencesOverlay";
 import { api } from "@/lib/api";
 import { UserSettingsDialog } from "./UserSettingsDialog";
+import { AIProfileDialog } from "./AIProfileDialog";
 
 export function WorkspaceNavigationToolbar() {
   const { currentWorkspace, loading, error } = useAppSelector((state) => state.workspace);
@@ -33,6 +34,7 @@ export function WorkspaceNavigationToolbar() {
   const [isAddMemberDialogOpen, setIsAddMemberDialogOpen] = useState(false);
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = useState(false);
+  const [isAIProfileOpen, setIsAIProfileOpen] = useState(false);
   const dispatch = useAppDispatch();
   const { toast } = useToast();
   const [statusInput, setStatusInput] = useState("");
@@ -274,6 +276,13 @@ export function WorkspaceNavigationToolbar() {
               </DropdownMenuItem>
               <DropdownMenuItem 
                 className="gap-2 cursor-pointer" 
+                onClick={() => setIsAIProfileOpen(true)}
+              >
+                <Bot className="h-4 w-4" />
+                AI Avatar Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className="gap-2 cursor-pointer" 
                 onClick={() => setIsPreferencesOpen(true)}
               >
                 <Settings className="h-4 w-4" />
@@ -323,6 +332,12 @@ export function WorkspaceNavigationToolbar() {
       <UserSettingsDialog
         open={isUserSettingsOpen}
         onOpenChange={setIsUserSettingsOpen}
+      />
+
+      {/* Add AIProfileDialog */}
+      <AIProfileDialog
+        open={isAIProfileOpen}
+        onOpenChange={setIsAIProfileOpen}
       />
     </div>
   );

@@ -7,6 +7,7 @@ import { messageRouter } from './messages';
 import { reactionRouter } from './reactions';
 import { fileRouter } from './files';
 import { pinRouter } from './pins';
+import { aiRouter } from './ai';
 
 // Export individual routers
 export {
@@ -18,4 +19,5 @@ export {
   reactionRouter,
   fileRouter,
   pinRouter,
+  aiRouter,
 };

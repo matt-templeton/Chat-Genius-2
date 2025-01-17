@@ -55,12 +55,12 @@ function isSameDay(date1: Date, date2: Date): boolean {
 // Date separator component
 function DateSeparator({ label }: { label: string }) {
   return (
-    <div className="relative py-4">
+    <div className="relative py-2">
       <div className="absolute inset-0 flex items-center">
         <div className="w-full border-t border-border"></div>
       </div>
       <div className="relative flex justify-center">
-        <span className="bg-background px-2 text-sm text-muted-foreground">
+        <span className="bg-background px-2 text-xs text-muted-foreground">
           {label}
         </span>
       </div>

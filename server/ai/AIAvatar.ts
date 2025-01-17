@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { Index, Pinecone as PineconeClient } from "@pinecone-database/pinecone";
 import { Document } from "langchain/document";
 import { PineconeStore } from "@langchain/pinecone";
@@ -10,17 +11,26 @@ import { BaseMessage } from "@langchain/core/messages";
 import { createStuffDocumentsChain } from "langchain/chains/combine_documents";
 import { createHistoryAwareRetriever } from "langchain/chains/history_aware_retriever";
 import { createRetrievalChain } from "langchain/chains/retrieval";
+import { getWebSocketManager } from '../websocket/WebSocketManager';
+import type { Message } from "@db/schema";
 
 // Types for our domain
-interface Message {
-  id: number;
-  userId?: number;
-  fromUserId?: number;
-  toUserId?: number;
-  content: string;
-  createdAt: Date;
-  channelId?: number;
-}
+// interface Message {
+//   messageId: number;
+//   content: string;
+//   userId: number;
+//   channelId: number;
+//   workspaceId: number;
+//   parentMessageId?: number;
+//   postedAt: string;
+//   createdAt: string;
+//   updatedAt: string;
+//   user?: {
+//     userId: number;
+//     displayName: string;
+//     profilePicture?: string | null;
+//   };
+// }
 
 interface AvatarConfig {
   userId: number;
@@ -31,14 +41,16 @@ interface AvatarConfig {
 }
 
 export class AIAvatarService {
+  private static instance: AIAvatarService;
   private pineconeClient: PineconeClient;
   private embeddings: OpenAIEmbeddings;
   private llm: ChatOpenAI;
   private indexName = "rag-project-index";
   private index: Index;
   private vectorStore: PineconeStore | null;
+  private initialized: boolean = false;
 
-  constructor() {
+  private constructor() {
     this.pineconeClient = new PineconeClient({
       apiKey: process.env.PINECONE_API_KEY!,
     });
@@ -54,55 +66,48 @@ export class AIAvatarService {
     this.vectorStore = null;
   }
 
+  public static getInstance(): AIAvatarService {
+    if (!AIAvatarService.instance) {
+      AIAvatarService.instance = new AIAvatarService();
+    }
+    return AIAvatarService.instance;
+  }
+
   async initialize() {
-    this.vectorStore = await PineconeStore.fromExistingIndex(this.embeddings, {
-      pineconeIndex: this.index,
-    });
+    if (!this.initialized) {
+      this.vectorStore = await PineconeStore.fromExistingIndex(this.embeddings, {
+        pineconeIndex: this.index,
+      });
+      this.initialized = true;
+    }
   }
 
   async indexUserMessage(message: Message): Promise<void> {
-    // Create a document from the message
-    const isMsg = "channelId" in message;
+    if (!this.initialized) await this.initialize();
+    
+    if (!message.userId || !message.channelId) {
+      console.error('Cannot index message: missing userId or channelId');
+      return;
+    }
+    
     const doc = new Document({
-      id: `${isMsg ? "msg" : "dm"}_${message.id}`,
-      pageContent: `[User ${isMsg ? message.userId : message.fromUserId}] ${message.content}`,
+      id: `msg_${message.messageId}`,
+      pageContent: `[User ${message.userId}] ${message.content}`,
       metadata: {
-        userId: isMsg ? message.userId?.toString() : message.fromUserId?.toString(),
-        timestamp: Math.floor(message.createdAt.getTime() / 1000),
-        channelId: isMsg ? message.channelId?.toString() : message.fromUserId! > message.toUserId! ? `dm_${message.toUserId}_${message.fromUserId}` : `dm_${message.fromUserId}_${message.toUserId}`,
+        userId: message.userId.toString(),
+        timestamp: Math.floor(new Date(message.createdAt).getTime() / 1000),
+        channelId: message.channelId.toString(),
       },
     });
 
-    await this.vectorStore!.addDocuments([doc], [`${isMsg ? "msg" : "dm"}_${message.id}`]);
-  }
-
-  async indexUserMessages(messages: Message[]): Promise<void> {
-    const documents = [];
-    const ids = [];
-    // Create documents from the messages
-    for (const message of messages) {
-      const isMsg = "channelId" in message;
-      const msgId = `${isMsg ? "msg" : "dm"}_${message.id}`;
-      ids.push(msgId);
-      const doc = new Document({
-        id: msgId,
-        pageContent: `[User ${isMsg ? message.userId : message.fromUserId}] ${message.content}`,
-        metadata: {
-          userId: isMsg ? message.userId?.toString() : message.fromUserId?.toString(),
-          timestamp: Math.floor(message.createdAt.getTime() / 1000),
-          channelId: isMsg ? message.channelId?.toString() : message.fromUserId! > message.toUserId! ? `dm_${message.toUserId}_${message.fromUserId}` : `dm_${message.fromUserId}_${message.toUserId}`,
-        },
-      });
-      documents.push(doc);
-    }
-
-    await this.vectorStore!.addDocuments(documents, ids);
+    await this.vectorStore!.addDocuments([doc], [`msg_${message.messageId}`]);
   }
 
   async createAvatarPersona(userId: number): Promise<AvatarConfig> {
+    if (!this.initialized) await this.initialize();
+
     const userMessages = await this.vectorStore!.similaritySearch("", 100, { userId: {'$eq': userId.toString()} });
 
-    // Analyze messages to create persona
     const prompt = `
       Analyze these messages and create a detailed persona description:
       ${userMessages.map((msg) => msg.pageContent).join("\n")}
@@ -128,13 +133,13 @@ export class AIAvatarService {
     const jsonLlm = this.llm.bind({ response_format: { type: "json_object" } });
     const response = await jsonLlm.invoke(prompt);
     const content = typeof response.content === "string" ? JSON.parse(response.content) : response.content;
-    console.log(content);
     return {userId: userId, contextWindow: 100, personalityTraits: content.personalityTraits, responseStyle: content.responseStyle, writingStyle: content.writingStyle};
   }
 
   async configureAvatar(config: AvatarConfig): Promise<void> {
+    if (!this.initialized) await this.initialize();
+
     const jsonConfig = JSON.stringify(config);
-    // Store avatar configuration in a separate collection
     await this.index.upsert([
       {
         id: `avatar-config-${config.userId}`,
@@ -152,15 +157,17 @@ export class AIAvatarService {
     userId: number,
     message: Message,
   ): Promise<string> {
-    // const fromUserId = "userId" in message ? message.userId : message.fromUserId;
-    const channelId = "userId" in message ? message.channelId?.toString() : message.fromUserId! > message.toUserId! ? `dm_${message.toUserId}_${message.fromUserId}` : `dm_${message.fromUserId}_${message.toUserId}`;
-    // Get avatar configuration
+    if (!this.initialized) await this.initialize();
+    if (!message.channelId) throw new Error('Cannot generate response: missing channelId');
+
+    const channelId = message.channelId.toString();
+    
     var configQuery = await this.vectorStore!.similaritySearch(
       `avatar-config-${userId}`,
       1,
       { type: "avatar-config", userId: {'$eq': userId!.toString()} },
     );
-    // console.log(configQuery);
+
     if (configQuery.length === 0) {
       const persona = await this.createAvatarPersona(userId);
       await this.configureAvatar(persona);
@@ -173,15 +180,14 @@ export class AIAvatarService {
     const avatarConfig: AvatarConfig = JSON.parse(configQuery[0].metadata.config);
 
     const llm = this.llm;
-    // const retriever = this.vectorStore!.asRetriever({
-    //     filter: { timestamp: {'$gt': Math.floor(message.createdAt.getTime() / 1000) - (3600 * 48)}, channelId: {'$eq': channelId} },
-    //     k: avatarConfig.contextWindow,
-    //   });
     const retriever = this.vectorStore!.asRetriever({
-      filter: { timestamp: {'$gt': Math.floor(message.createdAt.getTime() / 1000) - (3600 * 48)}, channelId: {'$eq': channelId} },
+      filter: { 
+        timestamp: {'$gt': Math.floor(new Date(message.createdAt).getTime() / 1000) - (3600 * 48)}, 
+        channelId: {'$eq': channelId} 
+      },
       k: avatarConfig.contextWindow,
     });
-    // Contextualize question
+
     const contextualizeQSystemPrompt = `
     Given a chat history and the latest user question
     which might reference context in the chat history,
@@ -199,7 +205,6 @@ export class AIAvatarService {
       rephrasePrompt: contextualizeQPrompt,
     });
 
-    // Answer question
     const qaSystemPrompt = `
         You are acting as [User ${userId}]'s AI avatar.
         Personality traits: ${avatarConfig.personalityTraits.join(", ")}
@@ -215,9 +220,6 @@ export class AIAvatarService {
       ["human", "{input}"],
     ]);
 
-    // Below we use createStuffDocuments_chain to feed all retrieved context
-    // into the LLM. Note that we can also use StuffDocumentsChain and other
-    // instances of BaseCombineDocumentsChain.
     const questionAnswerChain = await createStuffDocumentsChain({
       llm,
       prompt: qaPrompt,
@@ -233,39 +235,46 @@ export class AIAvatarService {
       chat_history,
       input: message.content,
     });
-    // console.log(response);
     return response.answer;
   }
-}
 
-// Example usage
-// async function setupAvatarSystem() {
-//   const avatarService = new AIAvatarService();
-//   await avatarService.initialize();
+  // Handle user mentions and generate AI responses
+  async handleUserMention(mentionedUserId: number, message: Message): Promise<void> {
+    try {
+      if (!message.channelId) {
+        console.error('Cannot handle mention: missing channelId');
+        return;
+      }
 
-//   // Index a new message
-//   await avatarService.indexUserMessage({
-//     id: 1,
-//     userId: 1,
-//     content: "Hey team, let's sync up tomorrow to discuss the project roadmap!",
-//     createdAt: new Date(),
-//   });
-
-//   // Create and configure avatar
-//   const persona = await avatarService.createAvatarPersona(1);
-//   // await avatarService.configureAvatar({
-//   //   userId: 1,
-//   //   personalityTraits: ['professional', 'collaborative', 'proactive'],
-//   //   responseStyle: 'friendly but business-focused',
-//   //   contextWindow: 10
-//   // });
-//   await avatarService.configureAvatar(persona);
-
-//   // Generate avatar response
-//   const response = await avatarService.generateAvatarResponse(
-//     1,
-//     "Do you have any updates on the project roadmap?",
-//   );
-
-//   console.log("Avatar Response:", response);
-// }
+      const response = await this.generateAvatarResponse(mentionedUserId, message);
+      
+      // Create a new message from the AI response
+      const wsManager = getWebSocketManager();
+      const channelId = message.channelId as number; // Type assertion since we've checked for null
+      wsManager.broadcastToWorkspace(message.workspaceId, {
+        type: 'MESSAGE_CREATED',
+        workspaceId: message.workspaceId,
+        data: {
+          messageId: -Date.now(), // Temporary ID, will be replaced by the actual message ID
+          channelId,
+          workspaceId: message.workspaceId,
+          userId: mentionedUserId,
+          content: response,
+          createdAt: new Date().toISOString(),
+          postedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          parentMessageId: null,
+          hasAttachments: false,
+          deleted: false,
+          user: {
+            userId: mentionedUserId,
+            displayName: `AI Avatar (User ${mentionedUserId})`,
+            profilePicture: null
+          }
+        }
+      });
+    } catch (error) {
+      console.error(`Error generating AI response for user ${mentionedUserId}:`, error);
+    }
+  }
+} 

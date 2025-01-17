@@ -22,7 +22,7 @@ export function MessageDisplayArea({ messages, onReplyClick, isInThread = false 
   return (
     <div className="flex-1 overflow-hidden">
       <ScrollArea className="h-full px-4">
-        <div className="py-4 space-y-4">
+        <div className="py-2 space-y-1">
           {messages
             .filter((msg, index, self) => 
               index === self.findIndex((m) => m.messageId === msg.messageId)

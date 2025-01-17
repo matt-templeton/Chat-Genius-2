@@ -14,6 +14,7 @@ import {
   reactionRouter,
   fileRouter,
   pinRouter,
+  aiRouter,
 } from "./routes/index";
 import express from "express";
 import { initializeWebSocketManager } from "./websocket/WebSocketManager";
@@ -78,6 +79,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Standalone feature routes
   app.use(`${apiPrefix}/files`, fileRouter);
+  
+  // AI routes
+  app.use(`${apiPrefix}/ai`, aiRouter);
 
   // Create HTTP server
   const httpServer = createServer(app);
