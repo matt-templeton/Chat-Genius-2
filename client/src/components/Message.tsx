@@ -257,7 +257,7 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
             </div>
           </div>
           <p className={cn(
-            "text-sm mt-1 break-words",
+            "text-sm mt-1 break-words whitespace-pre-wrap",
             isActiveUser && "text-right"
           )}>{message.content}</p>
 

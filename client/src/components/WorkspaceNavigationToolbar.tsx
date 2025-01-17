@@ -268,28 +268,31 @@ export function WorkspaceNavigationToolbar() {
               </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem 
-                className="gap-2 cursor-pointer" 
+                className="gap-2 cursor-pointer text-white" 
                 onClick={() => setIsUserSettingsOpen(true)}
               >
-                <User className="h-4 w-4" />
+                <User className="h-4 w-4 text-white" />
                 User Settings
               </DropdownMenuItem>
               <DropdownMenuItem 
-                className="gap-2 cursor-pointer" 
+                className="gap-2 cursor-pointer text-white" 
                 onClick={() => setIsAIProfileOpen(true)}
               >
-                <Bot className="h-4 w-4" />
+                <Bot className="h-4 w-4 text-white" />
                 AI Avatar Settings
               </DropdownMenuItem>
               <DropdownMenuItem 
-                className="gap-2 cursor-pointer" 
+                className="gap-2 cursor-pointer text-white" 
                 onClick={() => setIsPreferencesOpen(true)}
               >
-                <Settings className="h-4 w-4" />
+                <Settings className="h-4 w-4 text-white" />
                 Preferences
               </DropdownMenuItem>
-              <DropdownMenuItem className="gap-2 cursor-pointer" onClick={handleLogout}>
-                <LogOut className="h-4 w-4" />
+              <DropdownMenuItem 
+                className="gap-2 cursor-pointer text-white" 
+                onClick={handleLogout}
+              >
+                <LogOut className="h-4 w-4 text-white" />
                 Sign Out
               </DropdownMenuItem>
             </DropdownMenuContent>

@@ -10,6 +10,7 @@ import { logout } from "@/store/slices/auth-slice";
 import { useLocation } from "wouter";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
+import { LogOut } from "lucide-react";
 
 export function Toolbar() {
   const dispatch = useAppDispatch();
@@ -51,7 +52,8 @@ export function Toolbar() {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={handleLogout}>
+          <DropdownMenuItem onClick={handleLogout} className="text-white">
+            <LogOut className="h-4 w-4 text-white mr-2" />
             Logout
           </DropdownMenuItem>
         </DropdownMenuContent>

@@ -154,8 +154,31 @@ export function ChatArea() {
       event.data.channelId === parseInt(channelId) && 
       event.workspaceId === parseInt(workspaceId)
     ) {
-      // Skip thread replies in the main chat area
+      // Check if we've already processed this message
+      if (processedMessageIds.current.has(event.data.messageId)) {
+        console.log("Message already processed, skipping:", event.data.messageId);
+        return;
+      }
+
+      // Add message ID to processed set
+      processedMessageIds.current.add(event.data.messageId);
+      console.log("Added message ID to processed set:", event.data.messageId);
+
+      // If this is a thread reply, update the parent message's reply count
       if (event.data.parentMessageId) {
+        queryClient.setQueryData<Message[]>(
+          [`/api/v1/channels/${channelId}/messages`],
+          (old = []) => old.map(msg => {
+            if (msg.messageId === event.data.parentMessageId) {
+              return {
+                ...msg,
+                replyCount: (msg.replyCount || 0) + 1
+              };
+            }
+            return msg;
+          })
+        );
+
         // Only invalidate the thread query if we're viewing that thread
         if (threadMessageId === event.data.parentMessageId) {
           queryClient.invalidateQueries({ 
@@ -174,16 +197,6 @@ export function ChatArea() {
           eventWorkspaceId: event.workspaceId,
           currentWorkspaceId: parseInt(workspaceId)
         });
-
-        // Check if we've already processed this message
-        if (processedMessageIds.current.has(event.data.messageId)) {
-          console.log("Message already processed, skipping:", event.data.messageId);
-          return;
-        }
-
-        // Add message ID to processed set
-        processedMessageIds.current.add(event.data.messageId);
-        console.log("Added message ID to processed set:", event.data.messageId, "now there are ", processedMessageIds.current.size, "processed messages");
         
         const newMessage: Message = {
           messageId: event.data.messageId,

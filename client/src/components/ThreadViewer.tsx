@@ -7,6 +7,7 @@ import { MessageInput } from "./chat/MessageInput";
 import { Message } from "@/types/message";
 import { cn } from "@/lib/utils";
 import { useAppSelector } from "@/store";
+import { WebSocketMessageEvent } from "@/types/websocket";
 
 interface ThreadViewerProps {
   messageId: number;

@@ -2,13 +2,21 @@ import 'dotenv/config';
 
 import { Pinecone } from "@pinecone-database/pinecone";
 import { OpenAIEmbeddings } from "@langchain/openai";
-import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-import { RecursiveCharacterTextSplitter } from "langchain/text_splitter";
 import { db } from "@db/index";
-import { messages, workspaces, channels, users, type Message } from "@db/schema";
-import { eq, and } from "drizzle-orm";
-import * as path from 'path';
-import * as fs from 'fs/promises';
+import { messages, workspaces, type Message } from "@db/schema";
+import { eq } from "drizzle-orm";
+
+// Define metadata type to match Pinecone's requirements
+type MessageMetadata = {
+  messageId: string;
+  workspaceId: string;
+  content: string;
+  type: string;
+  timestamp: number;
+  channelId?: string;
+  userId?: string;
+  parentMessageId?: string;
+}
 
 // Batch size for processing messages
 const BATCH_SIZE = 100;
@@ -72,27 +80,6 @@ async function populateIndex() {
     const workspacesList = await db.select().from(workspaces);
     const index = pinecone.index('slackers');
 
-    // Get Thunderdome workspace for PDFs
-    const thunderdome = await db.query.workspaces.findFirst({
-      where: eq(workspaces.name, 'Thunderdome')
-    });
-
-    if (!thunderdome) {
-      throw new Error('Thunderdome workspace not found');
-    }
-
-    // Get Thunderdome's general channel
-    const generalChannel = await db.query.channels.findFirst({
-      where: and(
-        eq(channels.workspaceId, thunderdome.workspaceId),
-        eq(channels.name, 'general')
-      )
-    });
-
-    if (!generalChannel) {
-      throw new Error('General channel not found in Thunderdome workspace');
-    }
-
     // Process messages for each workspace
     for (const workspace of workspacesList) {
       console.log(`Processing messages for workspace ${workspace.workspaceId}...`);
@@ -102,6 +89,12 @@ async function populateIndex() {
         .from(messages)
         .where(eq(messages.workspaceId, workspace.workspaceId)) as Message[];
 
+      // Skip if no messages
+      if (workspaceMessages.length === 0) {
+        console.log(`No messages found for workspace ${workspace.workspaceId}`);
+        continue;
+      }
+
       // Process messages in batches
       const batches = chunkArray(workspaceMessages, BATCH_SIZE);
       
@@ -110,23 +103,29 @@ async function populateIndex() {
         console.log(`Processing batch ${batchIndex + 1}/${batches.length} for workspace ${workspace.workspaceId}`);
         
         // Generate embeddings for the batch
-        const texts = batch.map((msg: Message) => msg.content);
+        const texts = batch.map(msg => msg.content);
         const embeddingVectors = await embeddings.embedDocuments(texts);
         
         // Prepare vectors for upsert
-        const vectors = batch.map((msg: Message, i: number) => {
-          const metadata: Record<string, string | number> = {
-            timestamp: Math.floor(new Date(msg.createdAt).getTime() / 1000),
+        const vectors = batch.map((msg, i) => {
+          // Build metadata object with proper typing
+          const metadata: MessageMetadata = {
             messageId: msg.messageId.toString(),
-            workspaceId: msg.workspaceId.toString()
+            workspaceId: msg.workspaceId.toString(),
+            content: msg.content,
+            type: 'message',
+            timestamp: Math.floor(msg.createdAt.getTime() / 1000)
           };
-          
-          if (msg.userId) {
+
+          // Only add optional fields if they exist
+          if (msg.channelId != null) {
+            metadata.channelId = msg.channelId.toString();
+          }
+          if (msg.userId != null) {
             metadata.userId = msg.userId.toString();
           }
-          
-          if (msg.channelId) {
-            metadata.channelId = msg.channelId.toString();
+          if (msg.parentMessageId != null) {
+            metadata.parentMessageId = msg.parentMessageId.toString();
           }
 
           return {
@@ -142,77 +141,10 @@ async function populateIndex() {
         // Add a small delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 100));
       }
+
+      console.log(`Completed processing workspace ${workspace.workspaceId}`);
     }
 
-    // Process PDFs from philosopher directories
-    console.log('Processing philosopher PDFs...');
-    const usersDir = path.join(process.cwd(), 'db', 'seed', 'users');
-    const userDirs = await fs.readdir(usersDir);
-
-    const textSplitter = new RecursiveCharacterTextSplitter({
-      chunkSize: 1000,
-      chunkOverlap: 200,
-    });
-
-    for (const dir of userDirs) {
-      console.log(`Processing PDFs for ${dir}...`);
-      const dirPath = path.join(usersDir, dir);
-      const files = await fs.readdir(dirPath);
-      
-      // Get user ID from database
-      const user = await db.query.users.findFirst({
-        where: eq(users.displayName, dir)
-      });
-
-      if (!user) {
-        console.error(`User not found for ${dir}, skipping...`);
-        continue;
-      }
-
-      // Process each PDF in the directory
-      for (const file of files) {
-        if (!file.toLowerCase().endsWith('.pdf')) continue;
-
-        console.log(`Processing ${file}...`);
-        const filePath = path.join(dirPath, file);
-        const title = path.basename(file, '.pdf');
-
-        try {
-          // Load and split PDF
-          const loader = new PDFLoader(filePath);
-          const docs = await loader.load();
-          const splitDocs = await textSplitter.splitDocuments(docs);
-
-          // Generate embeddings for each chunk
-          for (let i = 0; i < splitDocs.length; i++) {
-            const doc = splitDocs[i];
-            const [embedding] = await embeddings.embedDocuments([doc.pageContent]);
-
-            const vector = {
-              id: `pdf_${user.userId}_${title}_${i}`,
-              values: embedding,
-              metadata: {
-                userId: user.userId.toString(),
-                channelId: generalChannel.channelId.toString(),
-                workspaceId: thunderdome.workspaceId.toString(),
-                title,
-                author: dir,
-                chunk: i,
-                pageNumber: doc.metadata.loc?.pageNumber,
-                timestamp: Math.floor(Date.now() / 1000)
-              }
-            };
-
-            // Upsert vector to Thunderdome's namespace
-            await index.namespace(thunderdome.workspaceId.toString()).upsert([vector]);
-            await new Promise(resolve => setTimeout(resolve, 100)); // Rate limiting delay
-          }
-        } catch (error) {
-          console.error(`Error processing PDF ${file}:`, error);
-        }
-      }
-    }
-    
     console.log('Index population completed successfully');
   } catch (error) {
     console.error('Error populating index:', error);
@@ -224,6 +156,7 @@ async function main() {
   try {
     await createIndex();
     await populateIndex();
+    console.log('Script completed successfully');
   } catch (error) {
     console.error('Script failed:', error);
     process.exit(1);

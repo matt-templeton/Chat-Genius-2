@@ -93,6 +93,7 @@
     "react-redux": "^9.2.0",
     "react-resizable-panels": "^2.1.4",
     "recharts": "^2.13.0",
+    "semantic-chunking": "^2.4.2",
     "sql-template-strings": "^2.2.2",
     "supertest": "^7.0.0",
     "tailwind-merge": "^2.5.4",

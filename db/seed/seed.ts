@@ -50,6 +50,66 @@ async function createUserWithWorkspace(userData: { email: string, displayName: s
   return user;
 }
 
+async function createPDFBot() {
+  console.log('Creating PDF Bot user...');
+  const hashedPassword = await bcrypt.hash(STANDARD_PASSWORD, 10);
+  const [pdfBot] = await db.insert(users).values({
+    email: 'pdf.bot@chatgenius.com',
+    passwordHash: hashedPassword,
+    displayName: 'PDFBot',
+  })
+  .returning()
+  .onConflictDoNothing();
+
+  if (!pdfBot) return null;
+
+  // Add PDF Bot to all workspaces
+  const allWorkspaces = await db.select().from(workspaces);
+  for (const workspace of allWorkspaces) {
+    // Get all channels in the workspace
+    const workspaceChannels = await db.select().from(channels).where(eq(channels.workspaceId, workspace.workspaceId));
+    
+    // Add to workspace
+    await db.insert(userWorkspaces).values({
+      userId: pdfBot.userId,
+      workspaceId: workspace.workspaceId,
+      role: 'MEMBER',
+    }).onConflictDoNothing();
+  }
+
+  return pdfBot;
+}
+
+async function createTestWorkspace() {
+  console.log('Creating test workspace...');
+  // Create test workspace
+  const [testWorkspace] = await db.insert(workspaces).values({
+    name: 'test',
+    description: 'Test workspace for development',
+  })
+  .returning();
+
+  // Create general channel
+  await db.insert(channels).values({
+    workspaceId: testWorkspace.workspaceId,
+    name: 'general',
+    topic: 'General discussions',
+    channelType: 'PUBLIC',
+  });
+
+  // Add all users to the test workspace
+  const allUsers = await db.select().from(users);
+  for (const user of allUsers) {
+    await db.insert(userWorkspaces).values({
+      userId: user.userId,
+      workspaceId: testWorkspace.workspaceId,
+      role: 'MEMBER',
+    }).onConflictDoNothing();
+  }
+
+  return testWorkspace;
+}
+
 async function seedDatabase() {
   try {
     // Step 1: Create users from users.json
@@ -62,76 +122,12 @@ async function seedDatabase() {
       });
     }
 
-    // Step 2: Create users from directories
-    console.log('Creating users from directories...');
-    const usersDir = path.join(process.cwd(), 'db', 'seed', 'users');
-    const userDirs = await fs.readdir(usersDir);
+    // Step 2: Create PDF Bot and add to all workspaces
+    await createPDFBot();
 
-    for (const dir of userDirs) {
-      const displayName = dir;
-      const email = `${displayName.toLowerCase().replace(/\s+/g, '.')}@philosophers.org`;
-      
-      // Check for profile image
-      const jpegPath = path.join(usersDir, dir, 'profile.jpg');
-      const pngPath = path.join(usersDir, dir, 'profile.png');
-      
-      let profilePicture;
-      try {
-        if (await fs.access(jpegPath).then(() => true).catch(() => false)) {
-          // Copy file to uploads directory
-          const fileName = `${displayName.toLowerCase().replace(/\s+/g, '_')}.jpg`;
-          const uploadPath = path.join(process.cwd(), 'uploads', fileName);
-          await fs.mkdir(path.join(process.cwd(), 'uploads'), { recursive: true });
-          await fs.copyFile(jpegPath, uploadPath);
-          profilePicture = `/uploads/${fileName}`;
-        } else if (await fs.access(pngPath).then(() => true).catch(() => false)) {
-          const fileName = `${displayName.toLowerCase().replace(/\s+/g, '_')}.png`;
-          const uploadPath = path.join(process.cwd(), 'uploads', fileName);
-          await fs.mkdir(path.join(process.cwd(), 'uploads'), { recursive: true });
-          await fs.copyFile(pngPath, uploadPath);
-          profilePicture = `/uploads/${fileName}`;
-        }
-      } catch (error) {
-        console.error(`Error handling profile picture for ${displayName}:`, error);
-      }
+    // Step 3: Create test workspace and add all users
+    await createTestWorkspace();
 
-      await createUserWithWorkspace({
-        email,
-        displayName,
-        password: STANDARD_PASSWORD,
-        profilePicture,
-      });
-    }
-
-    // Step 3 & 4: Create Thunderdome workspace and add all users
-    console.log('Creating Thunderdome workspace...');
-    const [thunderdome] = await db.insert(workspaces).values({
-      name: 'Thunderdome',
-      description: 'Welcome to Thunderdome!',
-    })
-    .returning();
-
-    // Add all users to Thunderdome
-    const allUsers = await db.select().from(users);
-    for (const user of allUsers) {
-      await db.insert(userWorkspaces).values({
-        userId: user.userId,
-        workspaceId: thunderdome.workspaceId,
-        role: 'MEMBER',
-      })
-      .onConflictDoNothing();
-    }
-
-    // Step 5: Create general channel in Thunderdome
-    console.log('Creating Thunderdome general channel...');
-    await db.insert(channels).values({
-      workspaceId: thunderdome.workspaceId,
-      name: 'general',
-      topic: 'General discussions',
-      channelType: 'PUBLIC',
-    });
-
-    console.log('Database seeding completed successfully!');
   } catch (error) {
     console.error('Error seeding database:', error);
     throw error;

@@ -8,8 +8,49 @@ import multer from "multer";
 import crypto from "crypto";
 import path from "path";
 import { promises as fs } from "fs";
+import { OpenAIEmbeddings } from "@langchain/openai";
+import { Pinecone } from "@pinecone-database/pinecone";
+import { runPythonScript } from "../utils/pythonRunner";
+
+// Types for semantic chunks
+interface SemanticChunk {
+  text: string;
+  metadata: {
+    page?: number;
+    title?: string;
+    [key: string]: any;
+  };
+}
+
+interface SemanticSplitResult {
+  success: boolean;
+  chunks: SemanticChunk[];
+  error?: string;
+}
+
+// Type for Pinecone metadata
+interface PdfMetadata {
+  [key: string]: string | number;
+  userId: string;
+  type: string;
+  title: string;
+  channelId: string;
+  pageNumber: number;
+  text: string;
+}
 
 const router = Router();
+
+// Initialize OpenAI embeddings
+const embeddings = new OpenAIEmbeddings({
+  modelName: "text-embedding-3-large",
+  dimensions: 3072,
+});
+
+// Initialize Pinecone client
+const pinecone = new Pinecone({
+  apiKey: process.env.PINECONE_API_KEY!,
+});
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -122,6 +163,86 @@ async function verifyWorkspaceAccess(
 }
 
 /**
+ * Helper function to truncate text while preserving words
+ */
+function truncateText(text: string, maxLength: number = 1000): string {
+  if (text.length <= maxLength) return text;
+  const truncated = text.slice(0, maxLength);
+  // Find the last complete word
+  const lastSpace = truncated.lastIndexOf(' ');
+  return truncated.slice(0, lastSpace) + '...';
+}
+
+/**
+ * Process PDF file and upsert to Pinecone
+ */
+async function processPdfForPinecone(
+  filePath: string,
+  userId: number,
+  channelId: number,
+  workspaceId: number,
+  fileRecord: typeof files.$inferSelect
+) {
+  try {
+    if (!fileRecord.fileUrl) {
+      throw new Error('File URL is missing');
+    }
+    
+    // Get just the filename from the fileUrl for the Python script
+    const filename = path.basename(fileRecord.fileUrl);
+    
+    // Use Python script to get semantic chunks
+    const result = await runPythonScript('semantic_split.py', [filename]) as SemanticSplitResult;
+    if (!result.success || result.chunks.length === 0) {
+      throw new Error(result.error || 'Failed to split PDF');
+    }
+
+    // Use the original filename (without .pdf extension) as the title
+    const title = path.basename(fileRecord.filename, '.pdf');
+    
+    // Generate embeddings for all chunks
+    const texts = result.chunks.map(chunk => chunk.text);
+    const embeddingVectors = await embeddings.embedDocuments(texts);
+
+    // Get Pinecone index
+    const index = pinecone.index('slackers');
+
+    // Prepare vectors with metadata
+    const vectors = embeddingVectors.map((vector, i) => {
+      // Build metadata object with proper typing
+      const metadata: PdfMetadata = {
+        userId: userId.toString(),
+        type: 'pdf',
+        title,
+        channelId: channelId.toString(),
+        pageNumber: result.chunks[i].metadata?.page || 0,
+        text: truncateText(texts[i]), // Truncate text to prevent metadata size issues
+      };
+
+      return {
+        id: `${title}_chunk${i}`,
+        values: vector,
+        metadata
+      };
+    });
+
+    // Upsert vectors to workspace namespace in smaller batches
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < vectors.length; i += BATCH_SIZE) {
+      const batch = vectors.slice(i, i + BATCH_SIZE);
+      await index.namespace(workspaceId.toString()).upsert(batch);
+      // Add a small delay between batches
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error processing PDF for Pinecone:', error);
+    return false;
+  }
+}
+
+/**
  * @route POST /files
  * @desc Upload a file, optionally attaching it to a message
  */
@@ -187,6 +308,33 @@ router.post(
           updatedAt: new Date(),
         })
         .returning();
+
+      // If the file is a PDF, process it for Pinecone
+      if (file.mimetype === 'application/pdf') {
+        // Get the channelId from the message if it exists
+        let channelId: number | undefined;
+        if (messageId) {
+          const message = await db.query.messages.findFirst({
+            where: eq(messages.messageId, parseInt(messageId))
+          });
+          if (message?.channelId != null) {
+            channelId = message.channelId;
+          }
+        }
+
+        if (channelId) {
+          // Process PDF in the background
+          processPdfForPinecone(
+            file.path,
+            req.user!.userId,
+            channelId,
+            parseInt(workspaceId),
+            fileRecord
+          ).catch(error => {
+            console.error('Error processing PDF:', error);
+          });
+        }
+      }
 
       res.status(201).json(fileRecord);
     } catch (error) {
