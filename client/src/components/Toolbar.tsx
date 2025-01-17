@@ -37,13 +37,13 @@ export function Toolbar() {
         )}
       </div>
 
-      <div className="flex-1 max-w-md mx-4">
+      {/* <div className="flex-1 max-w-md mx-4">
         <Input
           type="search"
           placeholder={`Search ${currentWorkspace?.name || 'Chat Genius'}...`}
           className="w-full h-8 bg-white/10 border-white/10 text-toolbar-text placeholder:text-toolbar-text/50"
         />
-      </div>
+      </div> */}
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

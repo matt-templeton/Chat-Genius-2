@@ -8,6 +8,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
+import { WebSocketReactionEvent } from "@/types/websocket";
 
 interface MessageFile {
   fileId: number;
@@ -82,6 +83,36 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
     };
   }, [selectedImage]);
 
+  useEffect(() => {
+    const handleReaction = (e: CustomEvent<WebSocketReactionEvent>) => {
+      if (e.detail.data.messageId === message.messageId) {
+        console.log("Message received reaction update:", e.detail);
+        queryClient.setQueryData<MessageType[]>(
+          [`/api/v1/channels/${message.channelId}/messages`],
+          (old = []) => old.map(msg => {
+            if (msg.messageId === message.messageId) {
+              const reactions = { ...(msg.reactions || {}) };
+              if (e.detail.type === "REACTION_ADDED") {
+                reactions[e.detail.data.emojiId] = e.detail.data.count;
+              } else if (e.detail.type === "REACTION_REMOVED") {
+                if (e.detail.data.count > 0) {
+                  reactions[e.detail.data.emojiId] = e.detail.data.count;
+                } else {
+                  delete reactions[e.detail.data.emojiId];
+                }
+              }
+              return { ...msg, reactions };
+            }
+            return msg;
+          })
+        );
+      }
+    };
+
+    window.addEventListener('ws-reaction', handleReaction as EventListener);
+    return () => window.removeEventListener('ws-reaction', handleReaction as EventListener);
+  }, [message.messageId, message.channelId, queryClient]);
+
   const handleEmojiSelect = async (emoji: any) => {
     try {
       const token = localStorage.getItem('accessToken');
@@ -106,22 +137,7 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
         throw new Error(`Failed to add reaction: ${error.details?.message || 'Unknown error'}`);
       }
 
-      // Update the messages query data to reflect the new reaction
-      queryClient.setQueryData<MessageType[]>(
-        [`/api/v1/channels/${message.channelId}/messages`],
-        (old = []) => old.map(msg => {
-          if (msg.messageId === message.messageId) {
-            return {
-              ...msg,
-              reactions: {
-                ...(msg.reactions || {}),
-                [emoji.native]: ((msg.reactions || {})[emoji.native] || 0) + 1
-              }
-            };
-          }
-          return msg;
-        })
-      );
+      // Remove optimistic update - let WebSocket event handle it
     } catch (error) {
       console.error('Error adding reaction:', error);
     }
@@ -147,22 +163,7 @@ export function Message({ message, onReplyClick, isInThread = false, isActiveUse
         throw new Error(`Failed to remove reaction: ${error.details?.message || 'Unknown error'}`);
       }
 
-      // Update the messages query data to reflect the removed reaction
-      queryClient.setQueryData<MessageType[]>(
-        [`/api/v1/channels/${message.channelId}/messages`],
-        (old = []) => old.map(msg => {
-          if (msg.messageId === message.messageId) {
-            const reactions = { ...(msg.reactions || {}) };
-            if (reactions[emojiId] > 1) {
-              reactions[emojiId]--;
-            } else {
-              delete reactions[emojiId];
-            }
-            return { ...msg, reactions };
-          }
-          return msg;
-        })
-      );
+      // Remove optimistic update - let WebSocket event handle it
     } catch (error) {
       console.error('Error removing reaction:', error);
     }

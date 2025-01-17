@@ -24,16 +24,23 @@ export default function ChatPage() {
   }, []);
 
   const handleReactionEvent = useCallback((event: WebSocketReactionEvent) => {
+    // Ensure we're dispatching the event with the correct type
+    console.log("Dispatching reaction event:", event);
     window.dispatchEvent(new CustomEvent('ws-reaction', { detail: event }));
   }, []);
 
   // Single WebSocket connection for the entire chat page
-  useWebSocket({
+  const { isConnected } = useWebSocket({
     workspaceId: currentWorkspace?.workspaceId || 0,
     onMessageEvent: handleMessageEvent,
     onChannelEvent: handleChannelEvent,
     onReactionEvent: handleReactionEvent,
   });
+
+  // Add this useEffect to log WebSocket connection status
+  useEffect(() => {
+    console.log("WebSocket connection status:", isConnected);
+  }, [isConnected]);
 
   useEffect(() => {
     if (!loading && !isAuthenticated) {

@@ -155,7 +155,8 @@ export function MessageInput({ channelId, workspaceId, parentMessageId }: Messag
         body: JSON.stringify({
           content: message,
           parentMessageId,
-          hasAttachments: Boolean(selectedFile)
+          hasAttachments: Boolean(selectedFile),
+          identifier: tempId
         }),
       });
 
@@ -164,6 +165,14 @@ export function MessageInput({ channelId, workspaceId, parentMessageId }: Messag
       }
 
       const serverMessage = await response.json();
+
+      // Dispatch optimistic message event with both IDs
+      window.dispatchEvent(new CustomEvent('optimistic-message', {
+        detail: { 
+          messageId: serverMessage.messageId,
+          identifier: tempId
+        }
+      }));
 
       // If there's a file to upload, do it now
       if (selectedFile) {

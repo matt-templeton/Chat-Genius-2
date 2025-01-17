@@ -57,12 +57,14 @@ export function useWebSocket({
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data) as WebSocketEvent;
+          console.log("WebSocket received event:", data);
           
           if (onChannelEvent && ["CHANNEL_CREATED", "CHANNEL_UPDATED", "CHANNEL_ARCHIVED"].includes(data.type)) {
             onChannelEvent(data as WebSocketChannelEvent);
           } else if (onMessageEvent && data.type === "MESSAGE_CREATED") {
             onMessageEvent(data as WebSocketMessageEvent);
           } else if (onReactionEvent && ["REACTION_ADDED", "REACTION_REMOVED"].includes(data.type)) {
+            console.log("Handling reaction event:", data);
             onReactionEvent(data as WebSocketReactionEvent);
           }
         } catch (error) {

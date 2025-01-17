@@ -11,7 +11,7 @@ import { OpenAIEmbeddings, ChatOpenAI } from "@langchain/openai";
 import { runPythonScript } from '../utils/pythonRunner';
 import path from 'path';
 import { ChatPromptTemplate, MessagesPlaceholder } from "@langchain/core/prompts";
-import { BaseMessage } from "@langchain/core/messages";
+import { BaseMessage, HumanMessage, AIMessage } from "@langchain/core/messages";
 import { createStuffDocumentsChain } from "langchain/chains/combine_documents";
 import { createHistoryAwareRetriever } from "langchain/chains/history_aware_retriever";
 import { createRetrievalChain } from "langchain/chains/retrieval";
@@ -73,9 +73,10 @@ const pinecone = new Pinecone({
 
 // Input validation schemas
 const createMessageSchema = z.object({
-  content: z.string().min(1, "Message content cannot be empty"),
-  parentMessageId: z.number().int().positive().optional(),
-  hasAttachments: z.boolean().optional()
+  content: z.string().min(1),
+  parentMessageId: z.number().optional(),
+  hasAttachments: z.boolean().optional(),
+  identifier: z.number().optional()
 });
 
 const updateMessageSchema = z.object({
@@ -316,8 +317,7 @@ async function handleUserMention(message: Message, mentionedUser: { userId: numb
       console.log('No query found after mention');
       return;
     }
-    console.log("QUERY")
-    console.log(query)
+
     // Get Pinecone index
     const index = pinecone.index('slackers');
 
@@ -331,8 +331,6 @@ async function handleUserMention(message: Message, mentionedUser: { userId: numb
       topK: 10,
       includeMetadata: true
     });
-    console.log("traitsResults RESULTS")
-    console.log(traitsResults)
     const writingStyleResults = await index.namespace('profiles').query({
       vector: await embeddings.embedQuery(`writing style`),
       filter: { 
@@ -342,8 +340,6 @@ async function handleUserMention(message: Message, mentionedUser: { userId: numb
       topK: 10,
       includeMetadata: true
     });
-    console.log("writingStyleResults RESULTS")
-    console.log(writingStyleResults)
     
     // Construct avatar config from query results
     const avatarConfig = {
@@ -351,9 +347,6 @@ async function handleUserMention(message: Message, mentionedUser: { userId: numb
       writingStyle: writingStyleResults.matches?.[0]?.metadata?.content as string || "clear and concise",
       contextWindow: 100
     };
-    console.log("AVATAR CONFIG")
-    console.log(avatarConfig)
-
 
     // Create vector store for message history
     const vectorStore = await PineconeStore.fromExistingIndex(embeddings, {
@@ -405,8 +398,7 @@ async function handleUserMention(message: Message, mentionedUser: { userId: numb
       new MessagesPlaceholder("chat_history"),
       ["human", "{input}"],
     ]);
-    console.log("QA PROMPT")
-    console.log(qaSystemPrompt)
+
     const questionAnswerChain = await createStuffDocumentsChain({
       llm,
       prompt: qaPrompt,
@@ -417,7 +409,59 @@ async function handleUserMention(message: Message, mentionedUser: { userId: numb
       combineDocsChain: questionAnswerChain,
     });
 
-    const chat_history: BaseMessage[] = [];
+    // Fetch the last 20 messages from either the channel or thread
+    let recentMessages;
+    if (message.parentMessageId) {
+      // Get thread messages
+      recentMessages = await db
+        .select({
+          messageId: messages.messageId,
+          content: messages.content,
+          userId: messages.userId,
+          displayName: users.displayName,
+          postedAt: messages.postedAt
+        })
+        .from(messages)
+        .leftJoin(users, eq(messages.userId, users.userId))
+        .where(and(
+          eq(messages.parentMessageId, message.parentMessageId),
+          eq(messages.workspaceId, message.workspaceId),
+          eq(messages.deleted, false)
+        ))
+        .orderBy(desc(messages.postedAt))
+        .limit(20);
+    } else {
+      // Get channel messages
+      recentMessages = await db
+        .select({
+          messageId: messages.messageId,
+          content: messages.content,
+          userId: messages.userId,
+          displayName: users.displayName,
+          postedAt: messages.postedAt
+        })
+        .from(messages)
+        .leftJoin(users, eq(messages.userId, users.userId))
+        .where(and(
+          eq(messages.channelId, message.channelId),
+          eq(messages.workspaceId, message.workspaceId),
+          isNull(messages.parentMessageId),
+          eq(messages.deleted, false)
+        ))
+        .orderBy(desc(messages.postedAt))
+        .limit(20);
+    }
+
+    // Convert messages to BaseMessage format
+    const chat_history = recentMessages.reverse().map(msg => {
+      const MessageClass = msg.userId === mentionedUser.userId ? AIMessage : HumanMessage;
+      return new MessageClass({
+        content: msg.content,
+        name: msg.displayName || `User ${msg.userId}`
+      });
+    });
+    console.log("CHAT HISTORY")
+    console.log(chat_history)
     const response = await ragChain.invoke({
       chat_history,
       input: query,
@@ -431,7 +475,7 @@ async function handleUserMention(message: Message, mentionedUser: { userId: numb
         channelId: message.channelId,
         userId: mentionedUser.userId,
         content: response.answer,
-        parentMessageId: message.parentMessageId || message.messageId, // Use original message's parentId if it exists, otherwise reply to the mention
+        parentMessageId: message.parentMessageId,
         hasAttachments: false,
         deleted: false,
         postedAt: now,
@@ -484,7 +528,6 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
 
     const { channelId } = req.params;
     const validationResult = createMessageSchema.safeParse(req.body);
-
     if (!validationResult.success) {
       return res.status(400).json({
         error: "Invalid Content",
@@ -496,7 +539,7 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
       });
     }
 
-    const { content, parentMessageId } = validationResult.data;
+    const { content, parentMessageId, identifier } = validationResult.data;
     // First get the channel to get its workspaceId
     const channel = await db.query.channels.findFirst({
       where: eq(channels.channelId, parseInt(channelId))
@@ -574,6 +617,7 @@ router.post('/:channelId/messages', isAuthenticated, async (req: Request, res: R
         parentMessageId: message.parentMessageId,
         hasAttachments: message.hasAttachments,
         createdAt: message.createdAt.toISOString(),
+        identifier: identifier,
         replyCount: 0,
         user: {
           userId: message.userId,

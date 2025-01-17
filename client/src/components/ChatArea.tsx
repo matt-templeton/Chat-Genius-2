@@ -82,6 +82,9 @@ export function ChatArea() {
   const processedMessageIds = useRef<Set<number>>(new Set());
   const existingMessageIds = useRef(new Set<number>());
 
+  // Add this state to track optimistic message IDs and their identifiers
+  const [optimisticMessages, setOptimisticMessages] = useState<Map<number, number>>(new Map());
+
   // Fetch channel details
   const { data: channel } = useQuery<Channel>({
     queryKey: [`/api/v1/channels/${channelId}`],
@@ -189,48 +192,52 @@ export function ChatArea() {
         return;
       }
 
-      // For messages from other users, proceed with normal handling
-      if (event.data.userId !== user?.userId) {
-        console.log("Message event matches current channel:", {
-          eventChannelId: event.data.channelId,
-          currentChannelId: parseInt(channelId),
-          eventWorkspaceId: event.workspaceId,
-          currentWorkspaceId: parseInt(workspaceId)
-        });
-        
-        const newMessage: Message = {
-          messageId: event.data.messageId,
-          channelId: event.data.channelId,
-          workspaceId: event.data.workspaceId,
-          userId: event.data.userId,
-          content: event.data.content,
-          postedAt: event.data.createdAt,
-          createdAt: event.data.createdAt,
-          updatedAt: event.data.createdAt,
-          deleted: false,
-          parentMessageId: event.data.parentMessageId,
-          hasAttachments: event.data.hasAttachments,
-          user: {
-            userId: event.data.user.userId,
-            displayName: event.data.user.displayName,
-            profilePicture: event.data.user.profilePicture
-          }
-        };
+      // Skip if this is an optimistic message we created in this browser window
+      // Check both the messageId and the identifier
+      const isOptimisticMessage = event.data.identifier && (
+        optimisticMessages.get(event.data.identifier) === event.data.messageId || // Check if it matches our optimistic mapping
+        existingMessageIds.current.has(event.data.messageId) || // Check if we already have this message ID
+        messages.some(msg => msg.messageId === event.data.identifier) // Check if we have a message with the temp ID
+      );
 
-        // Check if message exists using the ref instead of messages array
-        if (!existingMessageIds.current.has(newMessage.messageId)) {
-          console.log("Adding new message to realtime messages:", newMessage);
-          setRealtimeMessages(prev => [...prev, newMessage]);
-        } else {
-          console.log("Message already exists in existingMessageIds:", newMessage.messageId);
+      if (isOptimisticMessage) {
+        console.log("Skipping optimistic message:", event.data.messageId, "with identifier:", event.data.identifier);
+        return;
+      }
+
+      // Create the new message object
+      const newMessage: Message = {
+        messageId: event.data.messageId,
+        channelId: event.data.channelId,
+        workspaceId: event.data.workspaceId,
+        userId: event.data.userId,
+        content: event.data.content,
+        postedAt: event.data.createdAt,
+        createdAt: event.data.createdAt,
+        updatedAt: event.data.createdAt,
+        deleted: false,
+        parentMessageId: event.data.parentMessageId,
+        hasAttachments: event.data.hasAttachments,
+        user: {
+          userId: event.data.user.userId,
+          displayName: event.data.user.displayName,
+          profilePicture: event.data.user.profilePicture
         }
+      };
+
+      // Check if message exists using the ref instead of messages array
+      if (!existingMessageIds.current.has(newMessage.messageId)) {
+        console.log("Adding new message to realtime messages:", newMessage);
+        setRealtimeMessages(prev => [...prev, newMessage]);
+      } else {
+        console.log("Message already exists in existingMessageIds:", newMessage.messageId);
       }
     }
-  }, [channelId, workspaceId, queryClient, threadMessageId, user]);
+  }, [channelId, workspaceId, queryClient, threadMessageId, optimisticMessages, messages]);
 
   // Handle reaction events
   const handleReactionEvent = useCallback((event: WebSocketReactionEvent) => {
-    if (event.data.channelId === parseInt(channelId)) {
+    if (event.workspaceId === parseInt(workspaceId)) {
       queryClient.setQueryData<Message[]>(
         [`/api/v1/channels/${channelId}/messages`],
         (old = []) => old.map(msg => {
@@ -274,7 +281,7 @@ export function ChatArea() {
         );
       }
     }
-  }, [channelId, queryClient, threadMessageId]);
+  }, [channelId, workspaceId, queryClient, threadMessageId]);
 
   // Add this query for DM participants
   const { data: dmParticipants } = useQuery<DmParticipant[]>({
@@ -325,6 +332,30 @@ export function ChatArea() {
     window.addEventListener('ws-message', handleMessage as EventListener);
     return () => window.removeEventListener('ws-message', handleMessage as EventListener);
   }, [handleMessageEvent]);
+
+  // Listen for reaction events
+  useEffect(() => {
+    const handleReaction = (e: CustomEvent<WebSocketReactionEvent>) => {
+      handleReactionEvent(e.detail);
+    };
+
+    window.addEventListener('ws-reaction', handleReaction as EventListener);
+    return () => window.removeEventListener('ws-reaction', handleReaction as EventListener);
+  }, [handleReactionEvent]);
+
+  // Modify the optimistic message effect to use the new tracking
+  useEffect(() => {
+    const handleOptimisticMessage = (e: CustomEvent<{ messageId: number, identifier: number }>) => {
+      setOptimisticMessages(prev => {
+        const newMap = new Map(prev);
+        newMap.set(e.detail.identifier, e.detail.messageId);
+        return newMap;
+      });
+    };
+
+    window.addEventListener('optimistic-message', handleOptimisticMessage as EventListener);
+    return () => window.removeEventListener('optimistic-message', handleOptimisticMessage as EventListener);
+  }, []);
 
   if (!channelId) {
     return (
