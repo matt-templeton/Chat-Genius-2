@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from "@db";
 import { channels, userChannels, userWorkspaces, workspaces, users } from "@db/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, not, or, exists } from "drizzle-orm";
 import type { Request, Response } from 'express';
 import { isAuthenticated } from '../middleware/auth';
 import { z } from 'zod';
@@ -155,6 +155,7 @@ router.get('/:workspaceId/channels', isAuthenticated, async (req: Request, res: 
   try {
     const { workspaceId } = req.params;
     const includeArchived = req.query.includeArchived === 'true';
+    const currentUserId = req.user!.userId;
 
     // Verify workspace exists first
     const workspace = await db.query.workspaces.findFirst({
@@ -171,19 +172,26 @@ router.get('/:workspaceId/channels', isAuthenticated, async (req: Request, res: 
       });
     }
 
-    // Query channels based on includeArchived parameter
-    let channelsQuery = includeArchived ?
-      db.query.channels.findMany({
-        where: eq(channels.workspaceId, parseInt(workspaceId))
-      }) :
-      db.query.channels.findMany({
-        where: and(
-          eq(channels.workspaceId, parseInt(workspaceId)),
-          eq(channels.archived, false)
+    // Get all non-DM channels and DM channels where the user is a member
+    const channelsList = await db.query.channels.findMany({
+      where: and(
+        eq(channels.workspaceId, parseInt(workspaceId)),
+        includeArchived ? undefined : eq(channels.archived, false),
+        or(
+          // Include all non-DM channels
+          not(eq(channels.channelType, 'DM')),
+          // Include DM channels where user is a member
+          exists(
+            db.select().from(userChannels)
+            .where(and(
+              eq(userChannels.channelId, channels.channelId),
+              eq(userChannels.userId, currentUserId)
+            ))
+          )
         )
-      });
+      )
+    });
 
-    const channelsList = await channelsQuery;
     res.json(channelsList);
   } catch (error) {
     console.error('Error fetching workspace channels:', error);
