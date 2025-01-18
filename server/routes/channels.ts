@@ -173,24 +173,22 @@ router.get('/:workspaceId/channels', isAuthenticated, async (req: Request, res: 
     }
 
     // Get all non-DM channels and DM channels where the user is a member
-    const channelsList = await db.query.channels.findMany({
-      where: and(
+    const channelsList = await db.select().from(channels)
+      .where(and(
         eq(channels.workspaceId, parseInt(workspaceId)),
         includeArchived ? undefined : eq(channels.archived, false),
         or(
-          // Include all non-DM channels
           not(eq(channels.channelType, 'DM')),
-          // Include DM channels where user is a member
           exists(
-            db.select().from(userChannels)
-            .where(and(
-              eq(userChannels.channelId, channels.channelId),
-              eq(userChannels.userId, currentUserId)
-            ))
+            db.select()
+              .from(userChannels)
+              .where(and(
+                eq(userChannels.userId, currentUserId),
+                eq(userChannels.channelId, channels.channelId)
+              ))
           )
         )
-      )
-    });
+      ));
 
     res.json(channelsList);
   } catch (error) {
