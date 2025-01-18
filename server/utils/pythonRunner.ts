@@ -11,7 +11,13 @@ import path from 'path';
 export function runPythonScript(scriptName: string, args: string[] = [], stdinData?: any): Promise<any> {
   return new Promise((resolve, reject) => {
     const scriptPath = path.join(process.cwd(), 'server', 'py', scriptName);
-    const pythonProcess = spawn('python', [scriptPath, ...args]);
+    const userSitePackages = '/home/runner/.local/lib/python3.11/site-packages';
+const pythonProcess = spawn('python', [scriptPath, ...args], {
+  env: {
+    ...process.env,
+    PYTHONPATH: `${userSitePackages}:${process.env.PYTHONPATH || ''}`
+  }
+});
 
     let outputData = '';
     let errorData = '';
