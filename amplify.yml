@@ -12,10 +12,14 @@ backend:
         - pip install langchain_experimental langchain_openai langchain_community langchain-experimental pinecone-client openai python-dotenv
         - echo "Installing Node.js dependencies"
         - npm ci
+        - npm run build
   artifacts:
     baseDirectory: dist
     files:
       - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
 frontend:
   phases:
     preBuild:
@@ -30,4 +34,13 @@ frontend:
       - '**/*'
   cache:
     paths:
-      - node_modules/**/* 
+      - node_modules/**/*
+  customHeaders:
+    - pattern: '**/*'
+      headers:
+        - key: 'Cache-Control'
+          value: 'max-age=0, no-cache, no-store, must-revalidate'
+appRoot: .
+start:
+  command: npm start
+  service: backend 

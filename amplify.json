@@ -1,0 +1,10 @@
+{
+  "projectName": "Chat-Genius-2",
+  "type": "nodejs",
+  "framework": "express",
+  "nodeVersion": "18",
+  "start": {
+    "command": "npm start",
+    "port": 5000
+  }
+} 

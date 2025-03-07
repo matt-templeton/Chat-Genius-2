@@ -63,7 +63,7 @@ async function startServer() {
     }
 
     // Start server with retry logic for port conflicts
-    const PORT = 5000;
+    const PORT = parseInt(process.env.PORT || '5000', 10);
     server.on('error', (error: any) => {
       if (error.code === 'EADDRINUSE') {
         log(`Port ${PORT} is in use, attempting to close existing connections...`);
