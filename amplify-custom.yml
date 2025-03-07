@@ -1,0 +1,39 @@
+version: 1
+applications:
+  - appRoot: .
+    backend:
+      phases:
+        build:
+          commands:
+            - echo "Installing Python and dependencies"
+            - export PATH=$PATH:$HOME/.local/bin
+            - python3 -m pip install --user virtualenv
+            - python3 -m virtualenv venv
+            - source venv/bin/activate
+            - pip install langchain_experimental langchain_openai langchain_community langchain-experimental pinecone-client openai python-dotenv
+            - echo "Installing Node.js dependencies"
+            - npm ci
+      artifacts:
+        baseDirectory: dist
+        files:
+          - '**/*'
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: dist
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+    customHeaders:
+      - pattern: '**/*'
+        headers:
+          - key: 'Cache-Control'
+            value: 'max-age=0, no-cache, no-store, must-revalidate' 

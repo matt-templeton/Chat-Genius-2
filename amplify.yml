@@ -4,8 +4,10 @@ backend:
     build:
       commands:
         - echo "Installing Python and dependencies"
-        - apt-get update && apt-get install -y python3 python3-pip python3-venv
-        - python3 -m venv venv
+        - yum update -y
+        - yum install -y python3 python3-pip python3-devel gcc
+        - python3 -m pip install --user virtualenv
+        - python3 -m virtualenv venv
         - source venv/bin/activate
         - pip install langchain_experimental langchain_openai langchain_community langchain-experimental pinecone-client openai python-dotenv
         - echo "Installing Node.js dependencies"
