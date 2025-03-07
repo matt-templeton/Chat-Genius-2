@@ -8,3 +8,4 @@ vite.config.ts.*
 /uploads
 /server/uploads
 /pinecone
+/venv

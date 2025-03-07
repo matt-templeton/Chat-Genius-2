@@ -11,13 +11,34 @@ import path from 'path';
 export function runPythonScript(scriptName: string, args: string[] = [], stdinData?: any): Promise<any> {
   return new Promise((resolve, reject) => {
     const scriptPath = path.join(process.cwd(), 'server', 'py', scriptName);
-    const userSitePackages = '/home/runner/.local/lib/python3.11/site-packages';
-const pythonProcess = spawn('python', [scriptPath, ...args], {
-  env: {
-    ...process.env,
-    PYTHONPATH: `${userSitePackages}:${process.env.PYTHONPATH || ''}`
-  }
-});
+    
+    // Determine the Python executable path based on environment
+    let pythonExecutable: string;
+    
+    if (process.env.PYTHON_EXECUTABLE) {
+      // Use environment variable if set (useful for deployment)
+      pythonExecutable = process.env.PYTHON_EXECUTABLE;
+    } else if (process.env.AWS_AMPLIFY_APP_ID) {
+      // We're in AWS Amplify environment
+      pythonExecutable = 'python3';
+    } else if (process.env.NODE_ENV === 'production') {
+      // Generic production environment
+      pythonExecutable = process.platform === 'win32' ? 'python' : 'python3';
+    } else {
+      // Development environment with virtual env
+      pythonExecutable = process.platform === 'win32'
+        ? path.join(process.cwd(), 'venv', 'Scripts', 'python.exe')
+        : path.join(process.cwd(), 'venv', 'bin', 'python');
+    }
+    
+    console.log(`Using Python executable: ${pythonExecutable}`);
+    
+    const pythonProcess = spawn(pythonExecutable, [scriptPath, ...args], {
+      env: {
+        ...process.env,
+        // Add any environment-specific settings here if needed
+      }
+    });
 
     let outputData = '';
     let errorData = '';
