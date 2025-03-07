@@ -1,0 +1,30 @@
+version: 1
+backend:
+  phases:
+    build:
+      commands:
+        - echo "Checking Python version"
+        - python3 --version
+        - echo "Installing Python packages"
+        - python3 -m pip install --user langchain_experimental langchain_openai langchain_community langchain-experimental pinecone-client openai python-dotenv
+        - echo "Installing Node.js dependencies"
+        - npm ci
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci
+    build:
+      commands:
+        - npm run build
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/* 

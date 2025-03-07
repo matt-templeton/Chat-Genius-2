@@ -5,8 +5,8 @@ echo "Starting Amplify build process..."
 
 # Install Python and dependencies
 echo "Installing Python and dependencies..."
-yum update -y
-yum install -y python3 python3-pip python3-devel gcc
+sudo yum update -y
+sudo yum install -y python3 python3-pip python3-devel gcc
 python3 -m pip install --user virtualenv
 python3 -m virtualenv venv
 source venv/bin/activate
