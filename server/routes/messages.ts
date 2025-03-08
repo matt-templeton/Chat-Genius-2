@@ -295,6 +295,117 @@ async function handlePDFBotCommand(message: Message) {
 
       break;
     }
+    case 'query': {
+      console.log('Executing PDF RAG query:', queryText);
+      
+      // Check if this is a reply to a message
+      if (!message.parentMessageId) {
+        await respondWithMessage("Please reply to a message with a PDF attachment to query it.");
+        return;
+      }
+
+      // Get the parent message
+      const parentMessage = await db.query.messages.findFirst({
+        where: eq(messages.messageId, message.parentMessageId)
+      });
+
+      if (!parentMessage) {
+        await respondWithMessage("Could not find the message you're replying to.");
+        return;
+      }
+
+      // Check if parent message has a PDF attachment
+      const attachedFile = await db.query.files.findFirst({
+        where: and(
+          eq(files.messageId, parentMessage.messageId),
+          eq(files.fileType, 'application/pdf')
+        )
+      });
+
+      if (!attachedFile) {
+        await respondWithMessage("The message you're replying to doesn't have a PDF attachment.");
+        return;
+      }
+
+      if (!queryText.trim()) {
+        await respondWithMessage("Please provide a query after the command.");
+        return;
+      }
+
+      try {
+        // Get the document title (filename without .pdf extension)
+        const title = path.basename(attachedFile.filename, '.pdf');
+        
+        // Generate embedding for the query
+        const [queryEmbedding] = await embeddings.embedDocuments([queryText]);
+
+        // Get Pinecone index
+        const index = pinecone.index('slackers');
+
+        // Query the index with metadata filter
+        const queryResponse = await index.namespace(message.workspaceId.toString()).query({
+          vector: queryEmbedding,
+          topK: 5, // Get top 5 most relevant chunks
+          filter: {
+            type: { $eq: 'pdf' },
+            title: { $eq: title }
+          },
+          includeMetadata: true
+        });
+
+        if (!queryResponse.matches || queryResponse.matches.length === 0) {
+          await respondWithMessage("No relevant content found in the document to answer your query.");
+          return;
+        }
+
+        // Extract the relevant text chunks from the matches
+        const relevantChunks = queryResponse.matches.map(match => {
+          const metadata = match.metadata as PdfMetadata;
+          return {
+            text: metadata.text,
+            pageNumber: metadata.pageNumber
+          };
+        });
+
+        // Combine the chunks into a context
+        const context = relevantChunks.map(chunk => chunk.text).join('\n\n');
+
+        // Use OpenAI to generate a response based on the context and query
+        const llm = new ChatOpenAI({
+          temperature: 0.3,
+          modelName: "gpt-4o-mini",
+        });
+
+        // Create a prompt for the RAG response
+        const prompt = `
+You are PDFBot, an AI assistant that helps users find information in PDF documents.
+You've been asked the following question about a PDF document:
+
+Question: ${queryText}
+
+Here are the most relevant passages from the document:
+
+${context}
+
+Based ONLY on the information provided in these passages, provide a comprehensive answer to the question.
+If the information needed to answer the question is not contained in the passages, say "I don't have enough information in the document to answer this question fully."
+Include page numbers in your response when referencing specific information (format: [Page X]).
+`;
+
+        // Generate the response
+        const response = await llm.invoke(prompt);
+        
+        // Format the response with a header
+        const formattedResponse = `## Answer to: "${queryText}"\n\n${response.content}`;
+        
+        await respondWithMessage(formattedResponse);
+      } catch (error) {
+        console.error('Error querying PDF with RAG:', error);
+        await respondWithMessage("An error occurred while processing your query. Please try again.");
+      }
+      
+      break;
+    }
     case 'ask':
       console.log('Executing PDF question:', queryText);
       break;

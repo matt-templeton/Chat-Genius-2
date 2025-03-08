@@ -31,7 +31,7 @@ def main():
         text_splitter = SemanticChunker(
             OpenAIEmbeddings(),
             breakpoint_threshold_type="gradient",
-            breakpoint_threshold_amount=95.0,
+            breakpoint_threshold_amount=60.0,
             min_chunk_size=100  # Minimum chunk size in characters
         )
 
